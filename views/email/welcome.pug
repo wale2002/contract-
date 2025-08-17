@@ -1,0 +1,32 @@
+doctype html
+html
+  head
+    title Welcome to Fifthlab
+    style.
+      body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+      .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+      .button { display: inline-block; padding: 10px 20px; background-color: #007bff; color: #fff; text-decoration: none; border-radius: 5px; }
+      .warning { color: #d9534f; }
+  body
+    .container
+      h1 Hello #{firstName},
+      p Welcome to Fifthlab! An admin has created an account for you.
+      h2 Your Login Details
+      p
+        strong Username: 
+        | #{username}
+      p
+        strong Temporary Password: 
+        | #{tempPassword}
+      p
+        strong Please log in here: 
+        a.button(href=loginUrl) Log In
+      p
+        strong Set up your own password: 
+        a.button(href=url) Set Up Password
+      p
+        .warning This temporary password and setup link expire in 24 hours.
+      p For security, we recommend setting a new password after logging in.
+      p If you did not expect this account, please contact support at support@thefifthlab.com.
+      p Regards,
+      p The Fifthlab Team
