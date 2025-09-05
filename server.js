@@ -16,6 +16,7 @@ const allowedOrigins = [
   process.env.FRONTEND_URL || "https://fifthlab-collaboration.onrender.com",
   "http://localhost:3000",
   "http://localhost:8080",
+  "http://localhost:2212",
   "https://msg-app-5mwq.vercel.app",
   "http://localhost:5173",
 ];
