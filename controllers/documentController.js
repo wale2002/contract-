@@ -1,13 +1,12 @@
 // const Document = require("../models/Document");
 // const Organization = require("../models/Organization");
 // const User = require("../models/User");
-// const { mega } = require("../config/cloudinaryStorage");
-// const fsPromises = require("fs").promises;
-// const fs = require("fs"); // For existsSync and createReadStream
+// const { cloudinary } = require("../config/cloudinaryStorage"); // Updated import
+// const fs = require("fs");
 // const mongoose = require("mongoose");
 // const Email = require("../utils/email");
-
 // const path = require("path");
+// const https = require("https"); // Added for streaming downloads from Cloudinary
 
 // const getDocuments = async (req, res) => {
 //   const { orgId } = req.params;
@@ -71,26 +70,19 @@
 //       return res.status(404).json({ message: "User not found" });
 //     }
 
-//     // Initialize MEGA storage
-//     const megaStorage = await mega();
-//     const orgFolder =
-//       megaStorage.root.children.find((f) => f.name === orgId) ||
-//       (await megaStorage.mkdir({ name: orgId }));
-
-//     // Upload file to MEGA
-//     const fileStream = fs.createReadStream(file.path);
-//     const uploadedFile = await orgFolder.upload(
-//       { name: `${name}.pdf`, allowUploadBuffering: true },
-//       fileStream
-//     ).complete;
-
-//     const fileUrl = await uploadedFile.link();
+//     // Upload file to Cloudinary
+//     const uploadResult = await cloudinary.uploader.upload(file.path, {
+//       folder: orgId, // Use orgId as folder for organization
+//       public_id: name, // Use name as public_id (without .pdf extension)
+//       resource_type: "raw", // For PDFs/documents
+//       upload_preset: process.env.CLOUDINARY_UPLOAD_PRESET, // 'cmp_projects'
+//     });
 
 //     // Save document in DB
 //     const document = new Document({
 //       name,
-//       fileUrl,
-//       googleDriveFileId: uploadedFile.nodeId,
+//       fileUrl: uploadResult.secure_url,
+//       googleDriveFileId: uploadResult.public_id, // Reusing field for Cloudinary public_id
 //       organization: orgId,
 //       documentType: documentType || "Other",
 //       uploadedBy: req.user.id,
@@ -101,7 +93,7 @@
 //     console.log("uploadDocument: Document saved", {
 //       documentId: document._id,
 //       organization: document.organization,
-//       megaNodeId: uploadedFile.nodeId,
+//       cloudinaryPublicId: uploadResult.public_id,
 //     });
 
 //     // Send notification email
@@ -181,45 +173,32 @@
 //       return res.status(404).json({ message: "Document not found" });
 //     }
 
-//     // Download from MEGA
-//     const megaStorage = await mega();
-//     const fileNode = megaStorage.find(document.googleDriveFileId);
-//     if (!fileNode) {
-//       console.log("downloadDocument: File node not found", {
-//         nodeId: document.googleDriveFileId,
-//       });
-//       return res.status(404).json({ message: "File not found in MEGA" });
-//     }
-//     const dest = fs.createWriteStream(
-//       path.join(__dirname, `../../Uploads/temp_${document.name}.pdf`)
+//     // Stream the file from Cloudinary URL
+//     const fileUrl = document.fileUrl;
+//     res.setHeader("Content-Type", "application/pdf");
+//     res.setHeader(
+//       "Content-Disposition",
+//       `attachment; filename="${document.name}.pdf"`
 //     );
-//     await fileNode.download(dest);
 
-//     console.log("downloadDocument: File downloaded", {
-//       nodeId: document.googleDriveFileId,
+//     https
+//       .get(fileUrl, (stream) => {
+//         stream.pipe(res);
+//       })
+//       .on("error", (err) => {
+//         console.error("downloadDocument: Streaming error", err);
+//         res.status(500).json({ message: "Error downloading file" });
+//       });
+
+//     console.log("downloadDocument: File streaming started", {
+//       fileUrl: document.fileUrl,
 //     });
-//     res.download(
-//       path.join(__dirname, `../../Uploads/temp_${document.name}.pdf`),
-//       `${document.name}.pdf`,
-//       () => {
-//         try {
-//           fs.unlinkSync(
-//             path.join(__dirname, `../../Uploads/temp_${document.name}.pdf`)
-//           );
-//           console.log("downloadDocument: Temporary file cleaned up");
-//         } catch (cleanupError) {
-//           console.error(
-//             "downloadDocument: Failed to delete temporary file",
-//             cleanupError
-//           );
-//         }
-//       }
-//     );
 //   } catch (error) {
 //     console.error("downloadDocument: Error", error);
 //     res.status(500).json({ message: "Server error", error: error.message });
 //   }
 // };
+
 // const deleteDocument = async (req, res) => {
 //   const { id } = req.params;
 //   console.log("deleteDocument: Request received", { id, user: req.user });
@@ -245,17 +224,17 @@
 //         .json({ message: "Unauthorized to delete this document" });
 //     }
 
-//     // Delete file from MEGA
-//     const megaStorage = await mega();
-//     const fileNode = megaStorage.find(document.googleDriveFileId);
-//     if (fileNode) {
-//       await fileNode.delete();
-//       console.log("deleteDocument: File deleted from MEGA", {
-//         nodeId: document.googleDriveFileId,
+//     // Delete file from Cloudinary
+//     if (document.googleDriveFileId) {
+//       await cloudinary.uploader.destroy(document.googleDriveFileId, {
+//         resource_type: "raw",
+//       });
+//       console.log("deleteDocument: File deleted from Cloudinary", {
+//         publicId: document.googleDriveFileId,
 //       });
 //     } else {
-//       console.log("deleteDocument: File node not found in MEGA", {
-//         nodeId: document.googleDriveFileId,
+//       console.log("deleteDocument: No Cloudinary public_id found", {
+//         documentId: id,
 //       });
 //     }
 
@@ -271,6 +250,7 @@
 //     res.status(500).json({ message: "Server error", error: error.message });
 //   }
 // };
+
 // const getDocumentsByUser = async (req, res) => {
 //   const { userId } = req.params;
 //   console.log("getDocumentsByUser: Request received", {
@@ -358,6 +338,7 @@
 //     res.status(500).json({ message: "Server error", error: error.message });
 //   }
 // };
+
 // const updateDocument = async (req, res) => {
 //   const { id } = req.params;
 //   const { name, documentType } = req.body;
@@ -411,15 +392,16 @@
 //   getDocumentsByUser,
 //   getDocumentMetrics,
 // };
+
 const Document = require("../models/Document");
 const Organization = require("../models/Organization");
 const User = require("../models/User");
-const { cloudinary } = require("../config/cloudinaryStorage"); // Updated import
+const { cloudinary } = require("../config/cloudinaryStorage");
 const fs = require("fs");
 const mongoose = require("mongoose");
 const Email = require("../utils/email");
 const path = require("path");
-const https = require("https"); // Added for streaming downloads from Cloudinary
+const https = require("https");
 
 const getDocuments = async (req, res) => {
   const { orgId } = req.params;
@@ -428,17 +410,32 @@ const getDocuments = async (req, res) => {
     const organization = await Organization.findById(orgId);
     if (!organization) {
       console.log("getDocuments: Organization not found", { orgId });
-      return res.status(404).json({ message: "Organization not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Organization not found",
+      });
     }
 
     const documents = await Document.find({ organization: orgId }).select(
       "name documentType uploadDate"
     );
     console.log("getDocuments: Found documents", { count: documents.length });
-    res.json({ message: "Documents retrieved successfully", data: documents });
+    return res.status(200).json({
+      status: "success",
+      statusCode: 200,
+      message: documents.length
+        ? "Documents retrieved successfully"
+        : "No documents found",
+      token: null,
+      data: { user: null, documents },
+    });
   } catch (error) {
     console.error("getDocuments: Error", error);
-    res.status(500).json({ message: "Server error", error: error.message });
+    return res.status(500).json({
+      success: false,
+      message: "Server error during document retrieval",
+      error: error.message,
+    });
   }
 };
 
@@ -458,14 +455,20 @@ const uploadDocument = async (req, res) => {
 
   if (!file) {
     console.log("uploadDocument: No file uploaded");
-    return res.status(400).json({ message: "PDF file is required" });
+    return res.status(400).json({
+      success: false,
+      message: "PDF file is required",
+    });
   }
 
   if (!fs.existsSync(file.path)) {
     console.log("uploadDocument: Temporary file not found", {
       path: file.path,
     });
-    return res.status(400).json({ message: "Temporary file not found" });
+    return res.status(400).json({
+      success: false,
+      message: "Temporary file not found",
+    });
   }
 
   try {
@@ -473,29 +476,35 @@ const uploadDocument = async (req, res) => {
     const organization = await Organization.findById(orgId);
     if (!organization) {
       console.log("uploadDocument: Organization not found", { orgId });
-      return res.status(404).json({ message: "Organization not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Organization not found",
+      });
     }
 
     // Validate user
     const user = await User.findById(req.user.id);
     if (!user) {
       console.log("uploadDocument: User not found", { userId: req.user.id });
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
     }
 
     // Upload file to Cloudinary
     const uploadResult = await cloudinary.uploader.upload(file.path, {
-      folder: orgId, // Use orgId as folder for organization
-      public_id: name, // Use name as public_id (without .pdf extension)
-      resource_type: "raw", // For PDFs/documents
-      upload_preset: process.env.CLOUDINARY_UPLOAD_PRESET, // 'cmp_projects'
+      folder: orgId,
+      public_id: name,
+      resource_type: "raw",
+      upload_preset: process.env.CLOUDINARY_UPLOAD_PRESET,
     });
 
     // Save document in DB
     const document = new Document({
       name,
       fileUrl: uploadResult.secure_url,
-      googleDriveFileId: uploadResult.public_id, // Reusing field for Cloudinary public_id
+      googleDriveFileId: uploadResult.public_id,
       organization: orgId,
       documentType: documentType || "Other",
       uploadedBy: req.user.id,
@@ -548,9 +557,24 @@ const uploadDocument = async (req, res) => {
       );
     }
 
-    return res
-      .status(201)
-      .json({ message: "Document uploaded successfully", data: document });
+    return res.status(201).json({
+      status: "success",
+      statusCode: 201,
+      message: "Document uploaded successfully",
+      token: null,
+      data: {
+        user: null,
+        document: {
+          _id: document._id,
+          name: document.name,
+          documentType: document.documentType,
+          fileUrl: document.fileUrl,
+          organization: document.organization,
+          uploadedBy: document.uploadedBy,
+          createdAt: document.createdAt,
+        },
+      },
+    });
   } catch (error) {
     console.error("uploadDocument: Error", error);
 
@@ -569,9 +593,11 @@ const uploadDocument = async (req, res) => {
       }
     }
 
-    return res
-      .status(500)
-      .json({ message: "Server error", error: error.message });
+    return res.status(500).json({
+      success: false,
+      message: "Server error during document upload",
+      error: error.message,
+    });
   }
 };
 
@@ -583,7 +609,10 @@ const downloadDocument = async (req, res) => {
     const document = await Document.findById(id);
     if (!document) {
       console.log("downloadDocument: Document not found", { id });
-      return res.status(404).json({ message: "Document not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Document not found",
+      });
     }
 
     // Stream the file from Cloudinary URL
@@ -597,18 +626,24 @@ const downloadDocument = async (req, res) => {
     https
       .get(fileUrl, (stream) => {
         stream.pipe(res);
+        console.log("downloadDocument: File streaming started", {
+          fileUrl: document.fileUrl,
+        });
       })
       .on("error", (err) => {
         console.error("downloadDocument: Streaming error", err);
-        res.status(500).json({ message: "Error downloading file" });
+        return res.status(500).json({
+          success: false,
+          message: "Error downloading file",
+        });
       });
-
-    console.log("downloadDocument: File streaming started", {
-      fileUrl: document.fileUrl,
-    });
   } catch (error) {
     console.error("downloadDocument: Error", error);
-    res.status(500).json({ message: "Server error", error: error.message });
+    return res.status(500).json({
+      success: false,
+      message: "Server error during document download",
+      error: error.message,
+    });
   }
 };
 
@@ -620,7 +655,10 @@ const deleteDocument = async (req, res) => {
     const document = await Document.findById(id);
     if (!document) {
       console.log("deleteDocument: Document not found", { id });
-      return res.status(404).json({ message: "Document not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Document not found",
+      });
     }
 
     // Check if user is authorized (admin or uploader)
@@ -632,9 +670,10 @@ const deleteDocument = async (req, res) => {
         userId: req.user.id,
         documentUploader: document.uploadedBy,
       });
-      return res
-        .status(403)
-        .json({ message: "Unauthorized to delete this document" });
+      return res.status(403).json({
+        success: false,
+        message: "Unauthorized to delete this document",
+      });
     }
 
     // Delete file from Cloudinary
@@ -657,10 +696,20 @@ const deleteDocument = async (req, res) => {
       documentId: id,
     });
 
-    res.json({ message: "Document deleted successfully" });
+    return res.status(200).json({
+      status: "success",
+      statusCode: 200,
+      message: "Document deleted successfully",
+      token: null,
+      data: { user: null },
+    });
   } catch (error) {
     console.error("deleteDocument: Error", error);
-    res.status(500).json({ message: "Server error", error: error.message });
+    return res.status(500).json({
+      success: false,
+      message: "Server error during document deletion",
+      error: error.message,
+    });
   }
 };
 
@@ -678,9 +727,10 @@ const getDocumentsByUser = async (req, res) => {
         userId,
         requester: req.user.id,
       });
-      return res
-        .status(403)
-        .json({ message: "Unauthorized to view these documents" });
+      return res.status(403).json({
+        success: false,
+        message: "Unauthorized to view these documents",
+      });
     }
 
     const documents = await Document.find({ uploadedBy: userId }).select(
@@ -689,10 +739,22 @@ const getDocumentsByUser = async (req, res) => {
     console.log("getDocumentsByUser: Found documents", {
       count: documents.length,
     });
-    res.json({ message: "Documents retrieved successfully", data: documents });
+    return res.status(200).json({
+      status: "success",
+      statusCode: 200,
+      message: documents.length
+        ? "Documents retrieved successfully"
+        : "No documents found for this user",
+      token: null,
+      data: { user: null, documents },
+    });
   } catch (error) {
     console.error("getDocumentsByUser: Error", error);
-    res.status(500).json({ message: "Server error", error: error.message });
+    return res.status(500).json({
+      success: false,
+      message: "Server error during user document retrieval",
+      error: error.message,
+    });
   }
 };
 
@@ -705,7 +767,10 @@ const getDocumentMetrics = async (req, res) => {
     // Validate orgId
     if (!mongoose.Types.ObjectId.isValid(orgId)) {
       console.log("getDocumentMetrics: Invalid orgId", { orgId });
-      return res.status(400).json({ message: "Invalid organization ID" });
+      return res.status(400).json({
+        success: false,
+        message: "Invalid organization ID",
+      });
     }
 
     // Most popular reports (top 5 by accessCount)
@@ -737,18 +802,28 @@ const getDocumentMetrics = async (req, res) => {
     }).select("name documentType uploadedBy createdAt");
 
     console.log("getDocumentMetrics: Success", { orgId });
-    res.json({
-      message: "Metrics retrieved successfully",
+    return res.status(200).json({
+      status: "success",
+      statusCode: 200,
+      message: "Document metrics retrieved successfully",
+      token: null,
       data: {
-        mostPopular,
-        newReports,
-        accessedReports,
-        othersReports,
+        user: null,
+        metrics: {
+          mostPopular,
+          newReports,
+          accessedReports,
+          othersReports,
+        },
       },
     });
   } catch (error) {
     console.error("getDocumentMetrics: Error", error);
-    res.status(500).json({ message: "Server error", error: error.message });
+    return res.status(500).json({
+      success: false,
+      message: "Server error during document metrics retrieval",
+      error: error.message,
+    });
   }
 };
 
@@ -766,7 +841,10 @@ const updateDocument = async (req, res) => {
     const document = await Document.findById(id);
     if (!document) {
       console.log("updateDocument: Document not found", { id });
-      return res.status(404).json({ message: "Document not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Document not found",
+      });
     }
 
     // Check if user is authorized (admin or uploader)
@@ -778,9 +856,10 @@ const updateDocument = async (req, res) => {
         userId: req.user.id,
         documentUploader: document.uploadedBy,
       });
-      return res
-        .status(403)
-        .json({ message: "Unauthorized to update this document" });
+      return res.status(403).json({
+        success: false,
+        message: "Unauthorized to update this document",
+      });
     }
 
     // Update fields if provided
@@ -789,10 +868,31 @@ const updateDocument = async (req, res) => {
 
     await document.save();
     console.log("updateDocument: Document updated", { documentId: id });
-    res.json({ message: "Document updated successfully", data: document });
+    return res.status(200).json({
+      status: "success",
+      statusCode: 200,
+      message: "Document updated successfully",
+      token: null,
+      data: {
+        user: null,
+        document: {
+          _id: document._id,
+          name: document.name,
+          documentType: document.documentType,
+          fileUrl: document.fileUrl,
+          organization: document.organization,
+          uploadedBy: document.uploadedBy,
+          createdAt: document.createdAt,
+        },
+      },
+    });
   } catch (error) {
     console.error("updateDocument: Error", error);
-    res.status(500).json({ message: "Server error", error: error.message });
+    return res.status(500).json({
+      success: false,
+      message: "Server error during document update",
+      error: error.message,
+    });
   }
 };
 
