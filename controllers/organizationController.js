@@ -347,6 +347,7 @@
 const Organization = require("../models/Organization");
 const User = require("../models/User");
 const Document = require("../models/Document");
+const mongoose = require("mongoose");
 
 const getOrganizations = async (req, res) => {
   console.log("getOrganizations: Request received", { user: req.user });
@@ -459,6 +460,96 @@ const addOrganization = async (req, res) => {
   }
 };
 
+// const deleteOrganization = async (req, res) => {
+//   const { id } = req.params;
+//   console.log("deleteOrganization: Request received", {
+//     orgId: id,
+//     userId: req.user.id,
+//   });
+
+//   try {
+//     // Check authentication (middleware handles OrganizationManagement.deleteOrganizations permission)
+//     if (!req.user || !req.user.id) {
+//       console.log("deleteOrganization: Invalid authentication data");
+//       return res.status(401).json({
+//         status: "error",
+//         statusCode: 401,
+//         message: "Authentication required",
+//         data: { token: null, user: null, organization: null },
+//       });
+//     }
+
+//     // Validate ID
+//     if (!mongoose.Types.ObjectId.isValid(id)) {
+//       console.log("deleteOrganization: Invalid organization ID", { id });
+//       return res.status(400).json({
+//         status: "error",
+//         statusCode: 400,
+//         message: "Invalid organization ID",
+//         data: { token: null, user: null, organization: null },
+//       });
+//     }
+
+//     // Check if organization exists
+//     const organization = await Organization.findById(id);
+//     if (!organization) {
+//       console.log("deleteOrganization: Organization not found", { orgId: id });
+//       return res.status(404).json({
+//         status: "error",
+//         statusCode: 404,
+//         message: "Organization not found",
+//         data: { token: null, user: null, organization: null },
+//       });
+//     }
+
+//     // Check for associated users or documents
+//     const userCount = await User.countDocuments({ organization: id });
+//     const documentCount = await Document.countDocuments({ organization: id });
+//     if (userCount > 0 || documentCount > 0) {
+//       console.log("deleteOrganization: Cannot delete, has associated data", {
+//         orgId: id,
+//         userCount,
+//         documentCount,
+//         associatedUsers:
+//           userCount > 0
+//             ? await User.find({ organization: id }).select("_id email")
+//             : [],
+//         associatedDocuments:
+//           documentCount > 0
+//             ? await Document.find({ organization: id }).select("_id title")
+//             : [],
+//       });
+//       return res.status(400).json({
+//         status: "error",
+//         statusCode: 400,
+//         message: `Cannot delete organization with ${userCount} associated user(s) and ${documentCount} associated document(s)`,
+//         data: { token: null, user: null, organization: null },
+//       });
+//     }
+
+//     // Delete organization
+//     await Organization.findByIdAndDelete(id);
+
+//     console.log("deleteOrganization: Success", { orgId: id });
+//     return res.status(200).json({
+//       status: "success",
+//       statusCode: 200,
+//       message: "Organization deleted successfully",
+//       data: { token: null, user: null, organization: null },
+//     });
+//   } catch (error) {
+//     console.error("deleteOrganization: Error", {
+//       message: error.message,
+//       stack: error.stack,
+//     });
+//     return res.status(500).json({
+//       status: "error",
+//       statusCode: 500,
+//       message: "Server error during organization deletion",
+//       data: { token: null, user: null, organization: null },
+//     });
+//   }
+// };
 const deleteOrganization = async (req, res) => {
   const { id } = req.params;
   console.log("deleteOrganization: Request received", {
@@ -466,10 +557,15 @@ const deleteOrganization = async (req, res) => {
     userId: req.user.id,
   });
 
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     // Check authentication (middleware handles OrganizationManagement.deleteOrganizations permission)
     if (!req.user || !req.user.id) {
       console.log("deleteOrganization: Invalid authentication data");
+      await session.abortTransaction();
+      session.endSession();
       return res.status(401).json({
         status: "error",
         statusCode: 401,
@@ -481,6 +577,8 @@ const deleteOrganization = async (req, res) => {
     // Validate ID
     if (!mongoose.Types.ObjectId.isValid(id)) {
       console.log("deleteOrganization: Invalid organization ID", { id });
+      await session.abortTransaction();
+      session.endSession();
       return res.status(400).json({
         status: "error",
         statusCode: 400,
@@ -490,9 +588,11 @@ const deleteOrganization = async (req, res) => {
     }
 
     // Check if organization exists
-    const organization = await Organization.findById(id);
+    const organization = await Organization.findById(id).session(session);
     if (!organization) {
       console.log("deleteOrganization: Organization not found", { orgId: id });
+      await session.abortTransaction();
+      session.endSession();
       return res.status(404).json({
         status: "error",
         statusCode: 404,
@@ -501,36 +601,63 @@ const deleteOrganization = async (req, res) => {
       });
     }
 
-    // Check for associated users or documents
-    const userCount = await User.countDocuments({ organization: id });
-    const documentCount = await Document.countDocuments({ organization: id });
-    if (userCount > 0 || documentCount > 0) {
-      console.log("deleteOrganization: Cannot delete, has associated data", {
-        orgId: id,
-        userCount,
-        documentCount,
-      });
-      return res.status(400).json({
-        status: "error",
-        statusCode: 400,
-        message:
-          "Cannot delete organization with associated users or documents",
-        data: { token: null, user: null, organization: null },
-      });
-    }
+    // Get associated users and documents for logging
+    const associatedUsers = await User.find({ organization: id })
+      .select("_id email")
+      .session(session);
+    const associatedDocuments = await Document.find({ organization: id })
+      .select("_id title")
+      .session(session);
 
-    // Delete organization
-    await Organization.findByIdAndDelete(id);
+    // Delete associated users
+    const userDeleteResult = await User.deleteMany(
+      { organization: id },
+      { session }
+    );
+    const userCount = userDeleteResult.deletedCount;
 
-    console.log("deleteOrganization: Success", { orgId: id });
+    // Delete associated documents
+    const documentDeleteResult = await Document.deleteMany(
+      { organization: id },
+      { session }
+    );
+    const documentCount = documentDeleteResult.deletedCount;
+
+    // Delete the organization
+    await Organization.findByIdAndDelete(id, { session });
+
+    // Log the deletion details
+    console.log("deleteOrganization: Success", {
+      orgId: id,
+      deletedUsers: userCount,
+      deletedDocuments: documentCount,
+      associatedUsers: associatedUsers.map((user) => ({
+        _id: user._id,
+        email: user.email,
+      })),
+      associatedDocuments: associatedDocuments.map((doc) => ({
+        _id: doc._id,
+        title: doc.title,
+      })),
+    });
+
+    // Commit the transaction
+    await session.commitTransaction();
+    session.endSession();
+
     return res.status(200).json({
       status: "success",
       statusCode: 200,
-      message: "Organization deleted successfully",
+      message: `Organization deleted successfully along with ${userCount} user(s) and ${documentCount} document(s)`,
       data: { token: null, user: null, organization: null },
     });
   } catch (error) {
-    console.error("deleteOrganization: Error", error);
+    console.error("deleteOrganization: Error", {
+      message: error.message,
+      stack: error.stack,
+    });
+    await session.abortTransaction();
+    session.endSession();
     return res.status(500).json({
       status: "error",
       statusCode: 500,
