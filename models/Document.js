@@ -3,7 +3,7 @@
 // const documentSchema = new mongoose.Schema({
 //   name: { type: String, required: true },
 //   fileUrl: { type: String, required: true },
-//   googleDriveFileId: { type: String }, // Reused for MEGA node ID
+//   googleDriveFileId: { type: String }, // Reused for Cloudinary public_id
 //   organization: {
 //     type: mongoose.Schema.Types.ObjectId,
 //     ref: "Organization",
@@ -22,16 +22,26 @@
 //   accessCount: { type: Number, default: 0 },
 //   uploadDate: { type: Date, default: Date.now },
 //   createdAt: { type: Date, default: Date.now },
+//   startDate: { type: Date, required: false }, // New field
+//   expiryDate: { type: Date, required: false }, // New field
+//   isApproved: { type: Boolean, default: false },
+//   approvedBy: {
+//     type: mongoose.Schema.Types.ObjectId,
+//     ref: "User",
+//     default: null,
+//   },
+//   notificationPreferences: {
+//     contractExpiryDays: { type: Number, default: 30 }, // Notify X days before expiry
+//   },
 // });
 
 // module.exports = mongoose.model("Document", documentSchema);
-
 const mongoose = require("mongoose");
 
 const documentSchema = new mongoose.Schema({
   name: { type: String, required: true },
   fileUrl: { type: String, required: true },
-  googleDriveFileId: { type: String }, // Reused for Cloudinary public_id (consider renaming to cloudinaryPublicId)
+  googleDriveFileId: { type: String }, // Reused for Cloudinary public_id
   organization: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Organization",
@@ -48,8 +58,18 @@ const documentSchema = new mongoose.Schema({
     required: true,
   },
   accessCount: { type: Number, default: 0 },
-  uploadDate: { type: Date, default: Date.now },
   createdAt: { type: Date, default: Date.now },
+  startDate: { type: Date, required: false }, // New field
+  expiryDate: { type: Date, required: false }, // New field
+  isApproved: { type: Boolean, default: false },
+  approvedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    default: null,
+  },
+  notificationPreferences: {
+    contractExpiryDays: { type: Number, default: 30 }, // Notify X days before expiry
+  },
 });
 
 module.exports = mongoose.model("Document", documentSchema);

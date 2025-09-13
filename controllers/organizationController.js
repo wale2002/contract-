@@ -1,74 +1,157 @@
 // const Organization = require("../models/Organization");
+// const User = require("../models/User");
+// const Document = require("../models/Document");
 
 // const getOrganizations = async (req, res) => {
-//   console.log("getOrganizations: Request received", { user: req.user }); // Debug log
+//   console.log("getOrganizations: Request received", { user: req.user });
+
 //   try {
-//     const organizations = await Organization.find().select("name createdAt");
+//     // No need for re-fetching user—use req.user (populated by authMiddleware or middleware)
+//     // If you need fresh data, fetch here, but skip permission check
+//     const user = await User.findById(req.user.id).populate("role");
+//     if (!user) {
+//       console.log("getOrganizations: User not found", { userId: req.user.id });
+//       return res.status(404).json({
+//         status: "error",
+//         statusCode: 404,
+//         message: "User not found",
+//         data: { token: null, user: null, organizations: null },
+//       });
+//     }
+
+//     const organizations = await Organization.find().select(
+//       "name organizationType createdAt"
+//     );
 //     console.log("getOrganizations: Found organizations", {
 //       count: organizations.length,
-//     }); // Debug log
-//     if (organizations.length === 0) {
-//       return res
-//         .status(200)
-//         .json({ message: "No organizations found", data: [] });
-//     }
-//     res.json({
-//       message: "Organizations retrieved successfully",
-//       data: organizations,
+//     });
+
+//     return res.status(200).json({
+//       status: "success",
+//       statusCode: 200,
+//       message: organizations.length
+//         ? "Organizations retrieved successfully"
+//         : "No organizations found",
+//       data: { token: null, user: null, organizations },
 //     });
 //   } catch (error) {
-//     console.error("getOrganizations: Error", error); // Debug log
-//     res.status(500).json({ message: "Server error", error: error.message });
+//     console.error("getOrganizations: Error", error);
+//     return res.status(500).json({
+//       status: "error",
+//       statusCode: 500,
+//       message: "Server error during organization retrieval",
+//       data: { token: null, user: null, organizations: null },
+//     });
 //   }
 // };
 
 // const addOrganization = async (req, res) => {
-//   const { name } = req.body;
-//   console.log("addOrganization: Request received", { name, user: req.user }); // Debug log
-//   if (!name) {
-//     console.log("addOrganization: Missing name"); // Debug log
-//     return res.status(400).json({ message: "Organization name is required" });
-//   }
+//   const { name, organizationType } = req.body;
+//   console.log("addOrganization: Request received", {
+//     name,
+//     organizationType,
+//     user: req.user,
+//   });
 
 //   try {
-//     const organization = new Organization({ name });
+//     const user = await User.findById(req.user.id).populate("role");
+//     if (
+//       !user ||
+//       !user.role.permissions.OrganizationManagement.createOrganizations
+//     ) {
+//       console.log("addOrganization: Unauthorized", { userId: req.user.id });
+//       return res.status(403).json({
+//         status: "error",
+//         statusCode: 403,
+//         message: "Unauthorized to create organizations",
+//         data: { token: null, user: null, organization: null },
+//       });
+//     }
+
+//     if (!name?.trim() || !organizationType?.trim()) {
+//       console.log("addOrganization: Missing required fields");
+//       return res.status(400).json({
+//         status: "error",
+//         statusCode: 400,
+//         message: "Organization name and type are required",
+//         data: { token: null, user: null, organization: null },
+//       });
+//     }
+
+//     const organization = new Organization({ name, organizationType });
 //     await organization.save();
 //     console.log("addOrganization: Organization saved", {
 //       organizationId: organization._id,
-//     }); // Debug log
-//     res.status(201).json({
+//     });
+
+//     return res.status(201).json({
+//       status: "success",
+//       statusCode: 201,
 //       message: "Organization created successfully",
-//       data: organization,
+//       data: {
+//         token: null,
+//         user: null,
+//         organization: {
+//           _id: organization._id,
+//           name: organization.name,
+//           organizationType: organization.organizationType,
+//           createdAt: organization.createdAt,
+//         },
+//       },
 //     });
 //   } catch (error) {
-//     console.error("addOrganization: Error", error); // Debug log
+//     console.error("addOrganization: Error", error);
 //     if (error.code === 11000) {
-//       return res
-//         .status(400)
-//         .json({ message: "Organization name already exists" });
+//       return res.status(400).json({
+//         status: "error",
+//         statusCode: 400,
+//         message: "Organization name already exists",
+//         data: { token: null, user: null, organization: null },
+//       });
 //     }
-//     res.status(500).json({ message: "Server error", error: error.message });
+//     return res.status(500).json({
+//       status: "error",
+//       statusCode: 500,
+//       message: "Server error during organization creation",
+//       data: { token: null, user: null, organization: null },
+//     });
 //   }
 // };
+
 // const deleteOrganization = async (req, res) => {
 //   const { id } = req.params;
 //   console.log("deleteOrganization: Request received", {
 //     orgId: id,
 //     userId: req.user.id,
+//     userRoleName: req.user.role?.name, // Add for debugging
 //   });
 
 //   try {
-//     // Check role
-//     if (req.user.role !== "admin") {
-//       console.log("deleteOrganization: Unauthorized", { userId: req.user.id });
-//       return res.status(403).json({ message: "Admin access required" });
+//     // Ensure req.user exists
+//     if (!req.user) {
+//       return res.status(401).json({ success: false, message: "Unauthorized" });
+//     }
+
+//     // Check role by name (handles object structure)
+//     if (req.user.role?.name !== "superAdmin") {
+//       console.log("deleteOrganization: Unauthorized", {
+//         userId: req.user.id,
+//         userRoleName: req.user.role?.name || "undefined",
+//       });
+//       return res.status(403).json({
+//         success: false,
+//         message: "Super Admin access required",
+//       });
 //     }
 
 //     // Check if organization exists
 //     const organization = await Organization.findById(id);
 //     if (!organization) {
 //       console.log("deleteOrganization: Organization not found", { orgId: id });
-//       return res.status(404).json({ message: "Organization not found" });
+//       return res.status(404).json({
+//         success: false,
+//         message: "Organization not found",
+//       });
 //     }
 
 //     // Check for associated users or documents
@@ -81,6 +164,7 @@
 //         documentCount,
 //       });
 //       return res.status(400).json({
+//         success: false,
 //         message:
 //           "Cannot delete organization with associated users or documents",
 //       });
@@ -90,83 +174,139 @@
 //     await Organization.findByIdAndDelete(id);
 
 //     console.log("deleteOrganization: Success", { orgId: id });
-//     res.json({ message: "Organization deleted successfully" });
+//     return res.status(200).json({
+//       status: "success",
+//       statusCode: 200,
+//       message: "Organization deleted successfully",
+//       token: null,
+//       data: { user: null },
+//     });
 //   } catch (error) {
 //     console.error("deleteOrganization: Error", error);
-//     res.status(500).json({ message: "Server error", error: error.message });
+//     return res.status(500).json({
+//       success: false,
+//       message: "Server error during organization deletion",
+//       error: error.message,
+//     });
 //   }
 // };
 
 // const updateOrganization = async (req, res) => {
 //   const { id } = req.params;
-//   const { name } = req.body;
+//   const { name, organizationType } = req.body;
 //   console.log("updateOrganization: Request received", {
 //     orgId: id,
 //     name,
+//     organizationType,
 //     userId: req.user.id,
 //   });
 
 //   try {
-//     // Validate input
-//     if (!name) {
-//       console.log("updateOrganization: Missing name", { userId: req.user.id });
-//       return res.status(400).json({ message: "Organization name is required" });
-//     }
-
 //     // Check role
-//     if (req.user.role !== "admin") {
+//     if (req.user.role?.name !== "superAdmin") {
 //       console.log("updateOrganization: Unauthorized", { userId: req.user.id });
-//       return res.status(403).json({ message: "Admin access required" });
+//       return res.status(403).json({
+//         success: false,
+//         message: "Admin access required",
+//       });
 //     }
 
 //     // Check if organization exists
 //     const organization = await Organization.findById(id);
 //     if (!organization) {
 //       console.log("updateOrganization: Organization not found", { orgId: id });
-//       return res.status(404).json({ message: "Organization not found" });
+//       return res.status(404).json({
+//         success: false,
+//         message: "Organization not found",
+//       });
 //     }
 
-//     // Check for duplicate name
-//     const existingOrg = await Organization.findOne({ name, _id: { $ne: id } });
-//     if (existingOrg) {
-//       console.log("updateOrganization: Organization name exists", { name });
-//       return res
-//         .status(400)
-//         .json({ message: "Organization name already exists" });
+//     let updated = false;
+
+//     // Update name if provided
+//     if (name && name.trim()) {
+//       // Check for duplicate name
+//       const existingOrg = await Organization.findOne({
+//         name,
+//         _id: { $ne: id },
+//       });
+//       if (existingOrg) {
+//         console.log("updateOrganization: Organization name exists", { name });
+//         return res.status(400).json({
+//           success: false,
+//           message: "Organization name already exists",
+//         });
+//       }
+//       organization.name = name.trim();
+//       updated = true;
 //     }
 
-//     // Update organization
-//     organization.name = name;
+//     // Update organizationType if provided
+//     if (organizationType && organizationType.trim()) {
+//       organization.organizationType = organizationType.trim();
+//       updated = true;
+//     }
+
+//     // Validate input: at least one field must be provided
+//     if (!updated) {
+//       console.log("updateOrganization: No fields provided", {
+//         userId: req.user.id,
+//       });
+//       return res.status(400).json({
+//         success: false,
+//         message:
+//           "At least one field (name or organizationType) is required for update",
+//       });
+//     }
+
 //     await organization.save();
 
 //     console.log("updateOrganization: Success", { orgId: id });
-//     res.json({
+//     return res.status(200).json({
+//       status: "success",
+//       statusCode: 200,
 //       message: "Organization updated successfully",
+//       token: null,
 //       data: {
-//         _id: organization._id,
-//         name: organization.name,
-//         createdAt: organization.createdAt,
+//         user: null,
+//         organization: {
+//           _id: organization._id,
+//           name: organization.name,
+//           organizationType: organization.organizationType,
+//           createdAt: organization.createdAt,
+//         },
 //       },
 //     });
 //   } catch (error) {
 //     console.error("updateOrganization: Error", error);
-//     res.status(500).json({ message: "Server error", error: error.message });
+//     return res.status(500).json({
+//       success: false,
+//       message: "Server error during organization update",
+//       error: error.message,
+//     });
 //   }
 // };
+
 // const getOrganizationMetrics = async (req, res) => {
 //   console.log("getOrganizationMetrics: Request received", { user: req.user });
 
 //   try {
 //     if (!req.user || !req.user.id || !req.user.role) {
 //       console.log("getOrganizationMetrics: Invalid authentication data");
-//       return res.status(401).json({ message: "Authentication required" });
+//       return res.status(401).json({
+//         success: false,
+//         message: "Authentication required",
+//       });
 //     }
 
-//     if (req.user.role !== "admin") {
+//     if (req.user.role?.name !== "superAdmin") {
 //       console.log("getOrganizationMetrics: Unauthorized", {
 //         userId: req.user.id,
 //       });
-//       return res.status(403).json({ message: "Only admins can view metrics" });
+//       return res.status(403).json({
+//         success: false,
+//         message: "Only admins can view metrics",
+//       });
 //     }
 
 //     const totalOrganizations = await Organization.countDocuments();
@@ -175,19 +315,27 @@
 //       totalOrganizations,
 //     });
 
-//     res.status(200).json({
+//     return res.status(200).json({
+//       status: "success",
+//       statusCode: 200,
 //       message: "Organization metrics retrieved successfully",
-//       data: { totalOrganizations },
+//       token: null,
+//       data: {
+//         user: null,
+//         metrics: { totalOrganizations },
+//       },
 //     });
 //   } catch (error) {
 //     console.error("getOrganizationMetrics: Error", error);
 //     const isProduction = process.env.NODE_ENV === "production";
-//     res.status(500).json({
-//       message: "Server error",
+//     return res.status(500).json({
+//       success: false,
+//       message: "Server error during metrics retrieval",
 //       error: isProduction ? undefined : error.message,
 //     });
 //   }
 // };
+
 // module.exports = {
 //   getOrganizations,
 //   addOrganization,
@@ -202,64 +350,92 @@ const Document = require("../models/Document");
 
 const getOrganizations = async (req, res) => {
   console.log("getOrganizations: Request received", { user: req.user });
+
   try {
-    const organizations = await Organization.find().select("name createdAt");
+    // Check authentication (middleware handles OrganizationManagement.viewOrganizations permission)
+    if (!req.user || !req.user.id) {
+      console.log("getOrganizations: Invalid authentication data");
+      return res.status(401).json({
+        status: "error",
+        statusCode: 401,
+        message: "Authentication required",
+        data: { token: null, user: null, organizations: null },
+      });
+    }
+
+    const organizations = await Organization.find().select(
+      "name organizationType createdAt"
+    );
     console.log("getOrganizations: Found organizations", {
       count: organizations.length,
     });
-    if (organizations.length === 0) {
-      return res.status(200).json({
-        status: "success",
-        statusCode: 200,
-        message: "No organizations found",
-        token: null,
-        data: { user: null, organizations: [] },
-      });
-    }
+
     return res.status(200).json({
       status: "success",
       statusCode: 200,
-      message: "Organizations retrieved successfully",
-      token: null,
-      data: { user: null, organizations },
+      message: organizations.length
+        ? "Organizations retrieved successfully"
+        : "No organizations found",
+      data: { token: null, user: null, organizations },
     });
   } catch (error) {
     console.error("getOrganizations: Error", error);
     return res.status(500).json({
-      success: false,
+      status: "error",
+      statusCode: 500,
       message: "Server error during organization retrieval",
-      error: error.message,
+      data: { token: null, user: null, organizations: null },
     });
   }
 };
 
 const addOrganization = async (req, res) => {
-  const { name } = req.body;
-  console.log("addOrganization: Request received", { name, user: req.user });
-  if (!name) {
-    console.log("addOrganization: Missing name");
-    return res.status(400).json({
-      success: false,
-      message: "Organization name is required",
-    });
-  }
+  const { name, organizationType } = req.body;
+  console.log("addOrganization: Request received", {
+    name,
+    organizationType,
+    user: req.user,
+  });
 
   try {
-    const organization = new Organization({ name });
+    // Check authentication (middleware handles OrganizationManagement.createOrganizations permission)
+    if (!req.user || !req.user.id) {
+      console.log("addOrganization: Invalid authentication data");
+      return res.status(401).json({
+        status: "error",
+        statusCode: 401,
+        message: "Authentication required",
+        data: { token: null, user: null, organization: null },
+      });
+    }
+
+    if (!name?.trim() || !organizationType?.trim()) {
+      console.log("addOrganization: Missing required fields");
+      return res.status(400).json({
+        status: "error",
+        statusCode: 400,
+        message: "Organization name and type are required",
+        data: { token: null, user: null, organization: null },
+      });
+    }
+
+    const organization = new Organization({ name, organizationType });
     await organization.save();
     console.log("addOrganization: Organization saved", {
       organizationId: organization._id,
     });
+
     return res.status(201).json({
       status: "success",
       statusCode: 201,
       message: "Organization created successfully",
-      token: null,
       data: {
+        token: null,
         user: null,
         organization: {
           _id: organization._id,
           name: organization.name,
+          organizationType: organization.organizationType,
           createdAt: organization.createdAt,
         },
       },
@@ -268,14 +444,17 @@ const addOrganization = async (req, res) => {
     console.error("addOrganization: Error", error);
     if (error.code === 11000) {
       return res.status(400).json({
-        success: false,
+        status: "error",
+        statusCode: 400,
         message: "Organization name already exists",
+        data: { token: null, user: null, organization: null },
       });
     }
     return res.status(500).json({
-      success: false,
+      status: "error",
+      statusCode: 500,
       message: "Server error during organization creation",
-      error: error.message,
+      data: { token: null, user: null, organization: null },
     });
   }
 };
@@ -288,12 +467,25 @@ const deleteOrganization = async (req, res) => {
   });
 
   try {
-    // Check role
-    if (req.user.role !== "admin") {
-      console.log("deleteOrganization: Unauthorized", { userId: req.user.id });
-      return res.status(403).json({
-        success: false,
-        message: "Admin access required",
+    // Check authentication (middleware handles OrganizationManagement.deleteOrganizations permission)
+    if (!req.user || !req.user.id) {
+      console.log("deleteOrganization: Invalid authentication data");
+      return res.status(401).json({
+        status: "error",
+        statusCode: 401,
+        message: "Authentication required",
+        data: { token: null, user: null, organization: null },
+      });
+    }
+
+    // Validate ID
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      console.log("deleteOrganization: Invalid organization ID", { id });
+      return res.status(400).json({
+        status: "error",
+        statusCode: 400,
+        message: "Invalid organization ID",
+        data: { token: null, user: null, organization: null },
       });
     }
 
@@ -302,8 +494,10 @@ const deleteOrganization = async (req, res) => {
     if (!organization) {
       console.log("deleteOrganization: Organization not found", { orgId: id });
       return res.status(404).json({
-        success: false,
+        status: "error",
+        statusCode: 404,
         message: "Organization not found",
+        data: { token: null, user: null, organization: null },
       });
     }
 
@@ -317,9 +511,11 @@ const deleteOrganization = async (req, res) => {
         documentCount,
       });
       return res.status(400).json({
-        success: false,
+        status: "error",
+        statusCode: 400,
         message:
           "Cannot delete organization with associated users or documents",
+        data: { token: null, user: null, organization: null },
       });
     }
 
@@ -331,44 +527,49 @@ const deleteOrganization = async (req, res) => {
       status: "success",
       statusCode: 200,
       message: "Organization deleted successfully",
-      token: null,
-      data: { user: null },
+      data: { token: null, user: null, organization: null },
     });
   } catch (error) {
     console.error("deleteOrganization: Error", error);
     return res.status(500).json({
-      success: false,
+      status: "error",
+      statusCode: 500,
       message: "Server error during organization deletion",
-      error: error.message,
+      data: { token: null, user: null, organization: null },
     });
   }
 };
 
 const updateOrganization = async (req, res) => {
   const { id } = req.params;
-  const { name } = req.body;
+  const { name, organizationType } = req.body;
   console.log("updateOrganization: Request received", {
     orgId: id,
     name,
+    organizationType,
     userId: req.user.id,
   });
 
   try {
-    // Validate input
-    if (!name) {
-      console.log("updateOrganization: Missing name", { userId: req.user.id });
-      return res.status(400).json({
-        success: false,
-        message: "Organization name is required",
+    // Check authentication (middleware handles OrganizationManagement.editOrganizations permission)
+    if (!req.user || !req.user.id) {
+      console.log("updateOrganization: Invalid authentication data");
+      return res.status(401).json({
+        status: "error",
+        statusCode: 401,
+        message: "Authentication required",
+        data: { token: null, user: null, organization: null },
       });
     }
 
-    // Check role
-    if (req.user.role !== "admin") {
-      console.log("updateOrganization: Unauthorized", { userId: req.user.id });
-      return res.status(403).json({
-        success: false,
-        message: "Admin access required",
+    // Validate ID
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      console.log("updateOrganization: Invalid organization ID", { id });
+      return res.status(400).json({
+        status: "error",
+        statusCode: 400,
+        message: "Invalid organization ID",
+        data: { token: null, user: null, organization: null },
       });
     }
 
@@ -377,23 +578,55 @@ const updateOrganization = async (req, res) => {
     if (!organization) {
       console.log("updateOrganization: Organization not found", { orgId: id });
       return res.status(404).json({
-        success: false,
+        status: "error",
+        statusCode: 404,
         message: "Organization not found",
+        data: { token: null, user: null, organization: null },
       });
     }
 
-    // Check for duplicate name
-    const existingOrg = await Organization.findOne({ name, _id: { $ne: id } });
-    if (existingOrg) {
-      console.log("updateOrganization: Organization name exists", { name });
+    let updated = false;
+
+    // Update name if provided
+    if (name && name.trim()) {
+      // Check for duplicate name
+      const existingOrg = await Organization.findOne({
+        name,
+        _id: { $ne: id },
+      });
+      if (existingOrg) {
+        console.log("updateOrganization: Organization name exists", { name });
+        return res.status(400).json({
+          status: "error",
+          statusCode: 400,
+          message: "Organization name already exists",
+          data: { token: null, user: null, organization: null },
+        });
+      }
+      organization.name = name.trim();
+      updated = true;
+    }
+
+    // Update organizationType if provided
+    if (organizationType && organizationType.trim()) {
+      organization.organizationType = organizationType.trim();
+      updated = true;
+    }
+
+    // Validate input: at least one field must be provided
+    if (!updated) {
+      console.log("updateOrganization: No fields provided", {
+        userId: req.user.id,
+      });
       return res.status(400).json({
-        success: false,
-        message: "Organization name already exists",
+        status: "error",
+        statusCode: 400,
+        message:
+          "At least one field (name or organizationType) is required for update",
+        data: { token: null, user: null, organization: null },
       });
     }
 
-    // Update organization
-    organization.name = name;
     await organization.save();
 
     console.log("updateOrganization: Success", { orgId: id });
@@ -401,12 +634,13 @@ const updateOrganization = async (req, res) => {
       status: "success",
       statusCode: 200,
       message: "Organization updated successfully",
-      token: null,
       data: {
+        token: null,
         user: null,
         organization: {
           _id: organization._id,
           name: organization.name,
+          organizationType: organization.organizationType,
           createdAt: organization.createdAt,
         },
       },
@@ -414,9 +648,10 @@ const updateOrganization = async (req, res) => {
   } catch (error) {
     console.error("updateOrganization: Error", error);
     return res.status(500).json({
-      success: false,
+      status: "error",
+      statusCode: 500,
       message: "Server error during organization update",
-      error: error.message,
+      data: { token: null, user: null, organization: null },
     });
   }
 };
@@ -425,21 +660,14 @@ const getOrganizationMetrics = async (req, res) => {
   console.log("getOrganizationMetrics: Request received", { user: req.user });
 
   try {
-    if (!req.user || !req.user.id || !req.user.role) {
+    // Check authentication (middleware handles OrganizationManagement.viewOrganizations permission)
+    if (!req.user || !req.user.id) {
       console.log("getOrganizationMetrics: Invalid authentication data");
       return res.status(401).json({
-        success: false,
+        status: "error",
+        statusCode: 401,
         message: "Authentication required",
-      });
-    }
-
-    if (req.user.role !== "admin") {
-      console.log("getOrganizationMetrics: Unauthorized", {
-        userId: req.user.id,
-      });
-      return res.status(403).json({
-        success: false,
-        message: "Only admins can view metrics",
+        data: { token: null, user: null, metrics: null },
       });
     }
 
@@ -453,19 +681,19 @@ const getOrganizationMetrics = async (req, res) => {
       status: "success",
       statusCode: 200,
       message: "Organization metrics retrieved successfully",
-      token: null,
       data: {
+        token: null,
         user: null,
         metrics: { totalOrganizations },
       },
     });
   } catch (error) {
     console.error("getOrganizationMetrics: Error", error);
-    const isProduction = process.env.NODE_ENV === "production";
     return res.status(500).json({
-      success: false,
+      status: "error",
+      statusCode: 500,
       message: "Server error during metrics retrieval",
-      error: isProduction ? undefined : error.message,
+      data: { token: null, user: null, metrics: null },
     });
   }
 };

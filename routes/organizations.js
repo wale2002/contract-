@@ -1,19 +1,58 @@
+// const express = require("express");
+// const router = express.Router();
+// const authMiddleware = require("../middleware/auth");
+// const organizationController = require("../controllers/organizationController");
+
+// router.get("/", authMiddleware, organizationController.getOrganizations);
+// router.post("/", authMiddleware, organizationController.addOrganization);
+// router.delete(
+//   "/:id",
+//   authMiddleware,
+//   organizationController.deleteOrganization
+// );
+// router.patch("/:id", authMiddleware, organizationController.updateOrganization);
+// router.get(
+//   "/metrics",
+//   authMiddleware,
+//   organizationController.getOrganizationMetrics
+// );
+// module.exports = router;
+
 const express = require("express");
 const router = express.Router();
 const authMiddleware = require("../middleware/auth");
+const checkPermission = require("../middleware/checkPermission");
 const organizationController = require("../controllers/organizationController");
 
-router.get("/", authMiddleware, organizationController.getOrganizations);
-router.post("/", authMiddleware, organizationController.addOrganization);
+router.get(
+  "/",
+  authMiddleware,
+  checkPermission("OrganizationManagement.viewOrganizations"),
+  organizationController.getOrganizations
+);
+router.post(
+  "/",
+  authMiddleware,
+  checkPermission("OrganizationManagement.createOrganizations"),
+  organizationController.addOrganization
+);
 router.delete(
   "/:id",
   authMiddleware,
+  checkPermission("OrganizationManagement.deleteOrganizations"),
   organizationController.deleteOrganization
 );
-router.patch("/:id", authMiddleware, organizationController.updateOrganization);
+router.patch(
+  "/:id",
+  authMiddleware,
+  checkPermission("OrganizationManagement.editOrganizations"),
+  organizationController.updateOrganization
+);
 router.get(
   "/metrics",
   authMiddleware,
+  checkPermission("OrganizationManagement.viewOrganizations"), // Assuming metrics requires view permission
   organizationController.getOrganizationMetrics
 );
+
 module.exports = router;
