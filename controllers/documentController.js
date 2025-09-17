@@ -75,13 +75,17 @@
 //   console.log("getDocuments: Request received", { orgId, user: req.user });
 
 //   try {
-//     const user = await User.findById(req.user.id).populate("role");
-//     if (!user || !user.role.permissions.DocumentManagement.viewDocuments) {
-//       console.log("getDocuments: Unauthorized", { userId: req.user.id });
-//       return res.status(403).json({
+//     // Skip re-fetch if middleware populates req.user fully; otherwise, fetch minimally
+//     const user = await User.findById(req.user.id)
+//       .select("organization")
+//       .populate("role"); // Only select needed fields
+
+//     if (!user) {
+//       console.log("getDocuments: User not found", { userId: req.user.id });
+//       return res.status(404).json({
 //         status: "error",
-//         statusCode: 403,
-//         message: "Unauthorized to view documents",
+//         statusCode: 404,
+//         message: "User not found",
 //         data: { token: null, user: null, documents: null },
 //       });
 //     }
@@ -97,21 +101,23 @@
 //       });
 //     }
 
-//     if (
-//       user.role.name !== "superAdmin" &&
-//       user.organization.toString() !== orgId
-//     ) {
-//       console.log("getDocuments: User not in organization", {
-//         userId: req.user.id,
-//         orgId,
-//       });
-//       return res.status(403).json({
-//         status: "error",
-//         statusCode: 403,
-//         message: "Unauthorized to view documents in this organization",
-//         data: { token: null, user: null, documents: null },
-//       });
-//     }
+//     // Removed organization check to allow viewing documents in any organization
+//     // if (user.role?.name !== "superAdmin" && user.organization?.toString() !== orgId) {
+//     //   console.log(
+//     //     "getDocuments: User not in organization",
+//     //     {
+//     //       userId: req.user.id,
+//     //       orgId,
+//     //       userOrg: user.organization ? user.organization.toString() : "null/missing",
+//     //     }
+//     //   );
+//     //   return res.status(403).json({
+//     //     status: "error",
+//     //     statusCode: 403,
+//     //     message: "Unauthorized to view documents in this organization",
+//     //     data: { token: null, user: null, documents: null },
+//     //   });
+//     // }
 
 //     const documents = await Document.find({ organization: orgId }).select(
 //       "name documentType createdAt isApproved approvedBy startDate expiryDate"
@@ -140,7 +146,6 @@
 //     });
 //   }
 // };
-
 // const uploadDocument = async (req, res) => {
 //   const { orgId } = req.params;
 //   const { documentName, documentType, startDate, expiryDate } = req.body;
@@ -534,6 +539,7 @@
 
 //     if (
 //       user.role.name !== "admin" &&
+//       user.role.name !== "superAdmin" &&
 //       document.uploadedBy.toString() !== req.user.id
 //     ) {
 //       console.log("deleteDocument: Unauthorized", {
@@ -592,11 +598,7 @@
 
 //   try {
 //     const user = await User.findById(req.user.id).populate("role");
-//     if (
-//       !user ||
-//       req.user.role?.name !== "superAdmin" ||
-//       !user.role.permissions.DocumentManagement.viewDocuments
-//     ) {
+//     if (!user || !user.role.permissions.DocumentManagement.viewDocuments) {
 //       console.log("getDocumentsByUser: Unauthorized", {
 //         userId: req.user.id,
 //       });
@@ -608,7 +610,11 @@
 //       });
 //     }
 
-//     if (user.role.name !== "admin" && req.user.id !== userId) {
+//     if (
+//       user.role.name !== "admin" &&
+//       user.role.name !== "superAdmin" &&
+//       req.user.id !== userId
+//     ) {
 //       console.log("getDocumentsByUser: Unauthorized", {
 //         userId,
 //         requester: req.user.id,
@@ -790,6 +796,7 @@
 
 //     if (
 //       user.role.name !== "admin" &&
+//       user.role.name !== "superAdmin" &&
 //       document.uploadedBy.toString() !== req.user.id
 //     ) {
 //       console.log("updateDocument: Unauthorized", {
@@ -1047,7 +1054,7 @@ const getNotifications = async (req, res) => {
         status: "error",
         statusCode: 404,
         message: "User not found",
-        data: { token: null, user: null, notifications: null },
+        data: { user: null, notifications: null },
       });
     }
 
@@ -1058,7 +1065,7 @@ const getNotifications = async (req, res) => {
         status: "error",
         statusCode: 404,
         message: "Organization not found",
-        data: { token: null, user: null, notifications: null },
+        data: { user: null, notifications: null },
       });
     }
 
@@ -1080,7 +1087,6 @@ const getNotifications = async (req, res) => {
         ? "Notifications retrieved successfully"
         : "No notifications found",
       data: {
-        token: null,
         user: null,
         notifications,
       },
@@ -1091,7 +1097,7 @@ const getNotifications = async (req, res) => {
       status: "error",
       statusCode: 500,
       message: "Server error during notifications retrieval",
-      data: { token: null, user: null, notifications: null },
+      data: { user: null, notifications: null },
     });
   }
 };
@@ -1112,7 +1118,7 @@ const getDocuments = async (req, res) => {
         status: "error",
         statusCode: 404,
         message: "User not found",
-        data: { token: null, user: null, documents: null },
+        data: { user: null, documents: null },
       });
     }
 
@@ -1123,7 +1129,7 @@ const getDocuments = async (req, res) => {
         status: "error",
         statusCode: 404,
         message: "Organization not found",
-        data: { token: null, user: null, documents: null },
+        data: { user: null, documents: null },
       });
     }
 
@@ -1141,7 +1147,7 @@ const getDocuments = async (req, res) => {
     //     status: "error",
     //     statusCode: 403,
     //     message: "Unauthorized to view documents in this organization",
-    //     data: { token: null, user: null, documents: null },
+    //     data: { user: null, documents: null },
     //   });
     // }
 
@@ -1157,7 +1163,6 @@ const getDocuments = async (req, res) => {
         ? "Documents retrieved successfully"
         : "No documents found",
       data: {
-        token: null,
         user: null,
         documents,
       },
@@ -1168,10 +1173,11 @@ const getDocuments = async (req, res) => {
       status: "error",
       statusCode: 500,
       message: "Server error during document retrieval",
-      data: { token: null, user: null, documents: null },
+      data: { user: null, documents: null },
     });
   }
 };
+
 const uploadDocument = async (req, res) => {
   const { orgId } = req.params;
   const { documentName, documentType, startDate, expiryDate } = req.body;
@@ -1197,7 +1203,7 @@ const uploadDocument = async (req, res) => {
         status: "error",
         statusCode: 403,
         message: "Unauthorized to upload documents",
-        data: { token: null, user: null, document: null },
+        data: { user: null, document: null },
       });
     }
 
@@ -1207,7 +1213,7 @@ const uploadDocument = async (req, res) => {
         status: "error",
         statusCode: 400,
         message: "PDF file is required",
-        data: { token: null, user: null, document: null },
+        data: { user: null, document: null },
       });
     }
 
@@ -1219,7 +1225,7 @@ const uploadDocument = async (req, res) => {
         status: "error",
         statusCode: 400,
         message: "Temporary file not found",
-        data: { token: null, user: null, document: null },
+        data: { user: null, document: null },
       });
     }
 
@@ -1230,7 +1236,7 @@ const uploadDocument = async (req, res) => {
         status: "error",
         statusCode: 404,
         message: "Organization not found",
-        data: { token: null, user: null, document: null },
+        data: { user: null, document: null },
       });
     }
 
@@ -1246,7 +1252,7 @@ const uploadDocument = async (req, res) => {
         status: "error",
         statusCode: 403,
         message: "Unauthorized to upload documents to this organization",
-        data: { token: null, user: null, document: null },
+        data: { user: null, document: null },
       });
     }
 
@@ -1258,7 +1264,7 @@ const uploadDocument = async (req, res) => {
         status: "error",
         statusCode: 400,
         message: "Document name is required",
-        data: { token: null, user: null, document: null },
+        data: { user: null, document: null },
       });
     }
 
@@ -1271,7 +1277,7 @@ const uploadDocument = async (req, res) => {
           status: "error",
           statusCode: 400,
           message: "Invalid start date format",
-          data: { token: null, user: null, document: null },
+          data: { user: null, document: null },
         });
       }
     }
@@ -1283,7 +1289,7 @@ const uploadDocument = async (req, res) => {
           status: "error",
           statusCode: 400,
           message: "Invalid expiry date format",
-          data: { token: null, user: null, document: null },
+          data: { user: null, document: null },
         });
       }
       if (startDate && parsedExpiryDate <= parsedStartDate) {
@@ -1295,7 +1301,7 @@ const uploadDocument = async (req, res) => {
           status: "error",
           statusCode: 400,
           message: "Expiry date must be after start date",
-          data: { token: null, user: null, document: null },
+          data: { user: null, document: null },
         });
       }
     }
@@ -1400,7 +1406,6 @@ const uploadDocument = async (req, res) => {
       statusCode: 201,
       message: "Document uploaded successfully",
       data: {
-        token: null,
         user: null,
         document: {
           _id: document._id,
@@ -1438,7 +1443,7 @@ const uploadDocument = async (req, res) => {
       status: "error",
       statusCode: 500,
       message: "Server error during document upload",
-      data: { token: null, user: null, document: null },
+      data: { user: null, document: null },
     });
   }
 };
@@ -1455,7 +1460,7 @@ const downloadDocument = async (req, res) => {
         status: "error",
         statusCode: 403,
         message: "Unauthorized to view documents",
-        data: { token: null, user: null, document: null },
+        data: { user: null, document: null },
       });
     }
 
@@ -1466,7 +1471,7 @@ const downloadDocument = async (req, res) => {
         status: "error",
         statusCode: 404,
         message: "Document not found",
-        data: { token: null, user: null, document: null },
+        data: { user: null, document: null },
       });
     }
 
@@ -1479,7 +1484,7 @@ const downloadDocument = async (req, res) => {
         status: "error",
         statusCode: 404,
         message: "Organization not found",
-        data: { token: null, user: null, document: null },
+        data: { user: null, document: null },
       });
     }
 
@@ -1495,7 +1500,7 @@ const downloadDocument = async (req, res) => {
         status: "error",
         statusCode: 403,
         message: "Unauthorized to view documents in this organization",
-        data: { token: null, user: null, document: null },
+        data: { user: null, document: null },
       });
     }
 
@@ -1522,7 +1527,7 @@ const downloadDocument = async (req, res) => {
           status: "error",
           statusCode: 500,
           message: "Error downloading file",
-          data: { token: null, user: null, document: null },
+          data: { user: null, document: null },
         });
       });
   } catch (error) {
@@ -1531,7 +1536,7 @@ const downloadDocument = async (req, res) => {
       status: "error",
       statusCode: 500,
       message: "Server error during document download",
-      data: { token: null, user: null, document: null },
+      data: { user: null, document: null },
     });
   }
 };
@@ -1548,7 +1553,7 @@ const deleteDocument = async (req, res) => {
         status: "error",
         statusCode: 403,
         message: "Unauthorized to delete documents",
-        data: { token: null, user: null, document: null },
+        data: { user: null, document: null },
       });
     }
 
@@ -1559,7 +1564,7 @@ const deleteDocument = async (req, res) => {
         status: "error",
         statusCode: 404,
         message: "Document not found",
-        data: { token: null, user: null, document: null },
+        data: { user: null, document: null },
       });
     }
 
@@ -1576,7 +1581,7 @@ const deleteDocument = async (req, res) => {
         status: "error",
         statusCode: 403,
         message: "Unauthorized to delete this document",
-        data: { token: null, user: null, document: null },
+        data: { user: null, document: null },
       });
     }
 
@@ -1602,7 +1607,7 @@ const deleteDocument = async (req, res) => {
       status: "success",
       statusCode: 200,
       message: "Document deleted successfully",
-      data: { token: null, user: null, document: null },
+      data: { user: null, document: null },
     });
   } catch (error) {
     console.error("deleteDocument: Error", error);
@@ -1610,7 +1615,7 @@ const deleteDocument = async (req, res) => {
       status: "error",
       statusCode: 500,
       message: "Server error during document deletion",
-      data: { token: null, user: null, document: null },
+      data: { user: null, document: null },
     });
   }
 };
@@ -1632,7 +1637,7 @@ const getDocumentsByUser = async (req, res) => {
         status: "error",
         statusCode: 403,
         message: "Unauthorized to view documents",
-        data: { token: null, user: null, documents: null },
+        data: { user: null, documents: null },
       });
     }
 
@@ -1649,7 +1654,7 @@ const getDocumentsByUser = async (req, res) => {
         status: "error",
         statusCode: 403,
         message: "Unauthorized to view these documents",
-        data: { token: null, user: null, documents: null },
+        data: { user: null, documents: null },
       });
     }
 
@@ -1666,7 +1671,6 @@ const getDocumentsByUser = async (req, res) => {
         ? "Documents retrieved successfully"
         : "No documents found for this user",
       data: {
-        token: null,
         user: null,
         documents,
       },
@@ -1677,7 +1681,7 @@ const getDocumentsByUser = async (req, res) => {
       status: "error",
       statusCode: 500,
       message: "Server error during user document retrieval",
-      data: { token: null, user: null, documents: null },
+      data: { user: null, documents: null },
     });
   }
 };
@@ -1695,7 +1699,7 @@ const getDocumentMetrics = async (req, res) => {
         status: "error",
         statusCode: 403,
         message: "Unauthorized to view documents",
-        data: { token: null, user: null, metrics: null },
+        data: { user: null, metrics: null },
       });
     }
 
@@ -1705,7 +1709,7 @@ const getDocumentMetrics = async (req, res) => {
         status: "error",
         statusCode: 400,
         message: "Invalid organization ID",
-        data: { token: null, user: null, metrics: null },
+        data: { user: null, metrics: null },
       });
     }
 
@@ -1716,7 +1720,7 @@ const getDocumentMetrics = async (req, res) => {
         status: "error",
         statusCode: 404,
         message: "Organization not found",
-        data: { token: null, user: null, metrics: null },
+        data: { user: null, metrics: null },
       });
     }
 
@@ -1732,7 +1736,7 @@ const getDocumentMetrics = async (req, res) => {
         status: "error",
         statusCode: 403,
         message: "Unauthorized to view documents in this organization",
-        data: { token: null, user: null, metrics: null },
+        data: { user: null, metrics: null },
       });
     }
 
@@ -1766,7 +1770,6 @@ const getDocumentMetrics = async (req, res) => {
       statusCode: 200,
       message: "Document metrics retrieved successfully",
       data: {
-        token: null,
         user: null,
         metrics: {
           mostPopular,
@@ -1782,7 +1785,7 @@ const getDocumentMetrics = async (req, res) => {
       status: "error",
       statusCode: 500,
       message: "Server error during document metrics retrieval",
-      data: { token: null, user: null, metrics: null },
+      data: { user: null, metrics: null },
     });
   }
 };
@@ -1805,7 +1808,7 @@ const updateDocument = async (req, res) => {
         status: "error",
         statusCode: 403,
         message: "Unauthorized to update documents",
-        data: { token: null, user: null, document: null },
+        data: { user: null, document: null },
       });
     }
 
@@ -1816,7 +1819,7 @@ const updateDocument = async (req, res) => {
         status: "error",
         statusCode: 404,
         message: "Document not found",
-        data: { token: null, user: null, document: null },
+        data: { user: null, document: null },
       });
     }
 
@@ -1833,7 +1836,7 @@ const updateDocument = async (req, res) => {
         status: "error",
         statusCode: 403,
         message: "Unauthorized to update this document",
-        data: { token: null, user: null, document: null },
+        data: { user: null, document: null },
       });
     }
 
@@ -1847,7 +1850,6 @@ const updateDocument = async (req, res) => {
       statusCode: 200,
       message: "Document updated successfully",
       data: {
-        token: null,
         user: null,
         document: {
           _id: document._id,
@@ -1866,7 +1868,7 @@ const updateDocument = async (req, res) => {
       status: "error",
       statusCode: 500,
       message: "Server error during document update",
-      data: { token: null, user: null, document: null },
+      data: { user: null, document: null },
     });
   }
 };
@@ -1883,7 +1885,7 @@ const approveDocument = async (req, res) => {
         status: "error",
         statusCode: 403,
         message: "Unauthorized to approve documents",
-        data: { token: null, user: null, document: null },
+        data: { user: null, document: null },
       });
     }
 
@@ -1894,7 +1896,7 @@ const approveDocument = async (req, res) => {
         status: "error",
         statusCode: 404,
         message: "Document not found",
-        data: { token: null, user: null, document: null },
+        data: { user: null, document: null },
       });
     }
 
@@ -1908,7 +1910,6 @@ const approveDocument = async (req, res) => {
       statusCode: 200,
       message: "Document approved successfully",
       data: {
-        token: null,
         user: null,
         document: {
           _id: document._id,
@@ -1929,7 +1930,7 @@ const approveDocument = async (req, res) => {
       status: "error",
       statusCode: 500,
       message: "Server error during document approval",
-      data: { token: null, user: null, document: null },
+      data: { user: null, document: null },
     });
   }
 };
@@ -1951,7 +1952,7 @@ const getContractExpiryAlerts = async (req, res) => {
         status: "error",
         statusCode: 403,
         message: "Unauthorized to view documents",
-        data: { token: null, user: null, alerts: null },
+        data: { user: null, alerts: null },
       });
     }
 
@@ -1962,7 +1963,7 @@ const getContractExpiryAlerts = async (req, res) => {
         status: "error",
         statusCode: 404,
         message: "Organization not found",
-        data: { token: null, user: null, alerts: null },
+        data: { user: null, alerts: null },
       });
     }
 
@@ -1978,7 +1979,7 @@ const getContractExpiryAlerts = async (req, res) => {
         status: "error",
         statusCode: 403,
         message: "Unauthorized to view alerts in this organization",
-        data: { token: null, user: null, alerts: null },
+        data: { user: null, alerts: null },
       });
     }
 
@@ -2028,7 +2029,6 @@ const getContractExpiryAlerts = async (req, res) => {
         ? "Contract expiry alerts retrieved successfully"
         : "No contracts expiring soon",
       data: {
-        token: null,
         user: null,
         alerts,
       },
@@ -2039,7 +2039,7 @@ const getContractExpiryAlerts = async (req, res) => {
       status: "error",
       statusCode: 500,
       message: "Server error during contract expiry alerts retrieval",
-      data: { token: null, user: null, alerts: null },
+      data: { user: null, alerts: null },
     });
   }
 };

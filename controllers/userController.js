@@ -4,6 +4,7 @@
 // const Email = require("../utils/email");
 // const bcrypt = require("bcryptjs");
 // const jwt = require("jsonwebtoken");
+// const crypto = require("crypto");
 
 // const createUser = async (req, res) => {
 //   const { fullName, Department, email, password, role, phoneNumber, status } =
@@ -16,19 +17,13 @@
 //   });
 
 //   try {
-//     // Restrict to superAdmin or users with manageUserRoles permission
-//     const requestingUser = await User.findById(req.user.id).populate("role");
-//     if (
-//       !requestingUser ||
-//       (requestingUser.role.name !== "superAdmin" &&
-//         !requestingUser.role.permissions.UserManagement.manageUserRoles)
-//     ) {
-//       console.log("createUser: Unauthorized", { userId: req.user.id });
-//       return res.status(403).json({
+//     // Check authentication (middleware handles UserManagement.createUsers permission)
+//     if (!req.user || !req.user.id) {
+//       console.log("createUser: Invalid authentication data");
+//       return res.status(401).json({
 //         status: "error",
-//         statusCode: 403,
-//         message:
-//           "Only superAdmins or users with role management permissions can create users",
+//         statusCode: 401,
+//         message: "Authentication required",
 //         data: { token: null, user: null },
 //       });
 //     }
@@ -124,6 +119,23 @@
 //       });
 //     }
 
+//     // Prevent non-superAdmins from assigning superAdmin role
+//     const requestingUser = await User.findById(req.user.id).populate("role");
+//     if (
+//       roleDoc.name === "superAdmin" &&
+//       requestingUser.role.name !== "superAdmin"
+//     ) {
+//       console.log("createUser: Unauthorized to assign superAdmin role", {
+//         userId: req.user.id,
+//       });
+//       return res.status(403).json({
+//         status: "error",
+//         statusCode: 403,
+//         message: "Only superAdmins can assign superAdmin role",
+//         data: { token: null, user: null },
+//       });
+//     }
+
 //     // Check for existing user
 //     const existingUser = await User.findOne({ email: normalizedEmail });
 //     if (existingUser) {
@@ -141,7 +153,7 @@
 //       fullName,
 //       Department,
 //       email: normalizedEmail,
-//       password, // Plain password, let pre-save hook handle hashing
+//       password,
 //       role: roleDoc._id,
 //       phoneNumber,
 //       status: status || "Active",
@@ -223,6 +235,8 @@
 //     });
 //   }
 // };
+
+// // getAllUsers remains unchanged as it is already correct
 // const getAllUsers = async (req, res) => {
 //   console.log("getAllUsers: Request received", { user: req.user });
 
@@ -307,28 +321,7 @@
 //       });
 //     }
 
-//     // Restrict to admins or superAdmins or the user themselves
-//     const requestingUser = await User.findById(req.user.id).populate("role");
-//     if (
-//       requestingUser.role.name !== "admin" &&
-//       requestingUser.role.name !== "superAdmin" &&
-//       req.user.id !== id
-//     ) {
-//       console.log("getUserById: Unauthorized", {
-//         userId: req.user.id,
-//         requestedId: id,
-//       });
-//       return res.status(403).json({
-//         status: "error",
-//         statusCode: 403,
-//         message: "Unauthorized to view this user",
-//         data: {
-//           token: null,
-//           user: null,
-//         },
-//       });
-//     }
-
+//     // Allow users with UserManagement.viewUsers or themselves (middleware handles permission)
 //     const user = await User.findById(id)
 //       .populate("role")
 //       .select("-password -resetPasswordToken -resetPasswordExpires");
@@ -397,25 +390,6 @@
 //         status: "error",
 //         statusCode: 400,
 //         message: "Invalid user ID",
-//         data: {
-//           token: null,
-//           user: null,
-//         },
-//       });
-//     }
-
-//     // Restrict to admins or superAdmins
-//     const requestingUser = await User.findById(req.user.id).populate("role");
-//     if (
-//       !requestingUser ||
-//       (requestingUser.role.name !== "admin" &&
-//         requestingUser.role.name !== "superAdmin")
-//     ) {
-//       console.log("deleteUser: Unauthorized", { userId: req.user.id });
-//       return res.status(403).json({
-//         status: "error",
-//         statusCode: 403,
-//         message: "Only admins can delete users",
 //         data: {
 //           token: null,
 //           user: null,
@@ -494,25 +468,6 @@
 //       });
 //     }
 
-//     const requestingUser = await User.findById(req.user.id).populate("role");
-//     if (
-//       !requestingUser ||
-//       (requestingUser.role.name !== "admin" &&
-//         requestingUser.role.name !== "superAdmin")
-//     ) {
-//       console.log("getUserMetrics: Unauthorized", { userId: req.user.id });
-//       return res.status(403).json({
-//         status: "error",
-//         statusCode: 403,
-//         message: "Only admins can view metrics",
-//         data: {
-//           token: null,
-//           user: null,
-//           metrics: null,
-//         },
-//       });
-//     }
-
 //     const totalUsers = await User.countDocuments();
 
 //     console.log("getUserMetrics: Metrics retrieved", { totalUsers });
@@ -562,14 +517,13 @@
 //   });
 
 //   try {
-//     // Restrict to superAdmin
-//     const user = await User.findById(req.user.id).populate("role");
-//     if (!user || user.role.name !== "superAdmin") {
-//       console.log("createRole: Unauthorized", { userId: req.user.id });
-//       return res.status(403).json({
+//     // Check authentication (middleware handles UserManagement.manageUserRoles permission)
+//     if (!req.user || !req.user.id) {
+//       console.log("createRole: Invalid authentication data");
+//       return res.status(401).json({
 //         status: "error",
-//         statusCode: 403,
-//         message: "Only superAdmins can create roles",
+//         statusCode: 401,
+//         message: "Authentication required",
 //         data: { token: null, role: null },
 //       });
 //     }
@@ -593,6 +547,25 @@
 //         status: "error",
 //         statusCode: 400,
 //         message: "Role name already exists",
+//         data: { token: null, role: null },
+//       });
+//     }
+
+//     // Prevent non-superAdmins from creating superAdmin role or roles with manageUserRoles
+//     const requestingUser = await User.findById(req.user.id).populate("role");
+//     if (
+//       (name === "superAdmin" || permissions?.UserManagement?.manageUserRoles) &&
+//       requestingUser.role.name !== "superAdmin"
+//     ) {
+//       console.log(
+//         "createRole: Unauthorized to create superAdmin or manageUserRoles role",
+//         { userId: req.user.id }
+//       );
+//       return res.status(403).json({
+//         status: "error",
+//         statusCode: 403,
+//         message:
+//           "Only superAdmins can create superAdmin or manageUserRoles roles",
 //         data: { token: null, role: null },
 //       });
 //     }
@@ -660,18 +633,13 @@
 //   console.log("getAllRoles: Request received", { user: req.user });
 
 //   try {
-//     const requestingUser = await User.findById(req.user.id).populate("role");
-//     if (
-//       !requestingUser ||
-//       (requestingUser.role.name !== "superAdmin" &&
-//         !requestingUser.role.permissions.UserManagement.manageUserRoles)
-//     ) {
-//       console.log("getAllRoles: Unauthorized", { userId: req.user.id });
-//       return res.status(403).json({
+//     // Check authentication (middleware handles UserManagement.viewUsers or manageUserRoles permission)
+//     if (!req.user || !req.user.id) {
+//       console.log("getAllRoles: Invalid authentication data");
+//       return res.status(401).json({
 //         status: "error",
-//         statusCode: 403,
-//         message:
-//           "Only superAdmins or users with role management permissions can view roles",
+//         statusCode: 401,
+//         message: "Authentication required",
 //         data: { token: null, roles: null },
 //       });
 //     }
@@ -708,13 +676,13 @@
 //   });
 
 //   try {
-//     const requestingUser = await User.findById(req.user.id).populate("role");
-//     if (!requestingUser || requestingUser.role.name !== "superAdmin") {
-//       console.log("updateRole: Unauthorized", { userId: req.user.id });
-//       return res.status(403).json({
+//     // Check authentication (middleware handles UserManagement.manageUserRoles permission)
+//     if (!req.user || !req.user.id) {
+//       console.log("updateRole: Invalid authentication data");
+//       return res.status(401).json({
 //         status: "error",
-//         statusCode: 403,
-//         message: "Only superAdmins can update roles",
+//         statusCode: 401,
+//         message: "Authentication required",
 //         data: { token: null, role: null },
 //       });
 //     }
@@ -726,6 +694,27 @@
 //         status: "error",
 //         statusCode: 404,
 //         message: "Role not found",
+//         data: { token: null, role: null },
+//       });
+//     }
+
+//     // Prevent non-superAdmins from updating superAdmin role or manageUserRoles permissions
+//     const requestingUser = await User.findById(req.user.id).populate("role");
+//     if (
+//       (name === "superAdmin" ||
+//         role.name === "superAdmin" ||
+//         permissions?.UserManagement?.manageUserRoles) &&
+//       requestingUser.role.name !== "superAdmin"
+//     ) {
+//       console.log(
+//         "updateRole: Unauthorized to update superAdmin or manageUserRoles",
+//         { userId: req.user.id }
+//       );
+//       return res.status(403).json({
+//         status: "error",
+//         statusCode: 403,
+//         message:
+//           "Only superAdmins can update superAdmin roles or manageUserRoles permissions",
 //         data: { token: null, role: null },
 //       });
 //     }
@@ -824,13 +813,13 @@
 //   console.log("deleteRole: Request received", { roleId: id, user: req.user });
 
 //   try {
-//     const requestingUser = await User.findById(req.user.id).populate("role");
-//     if (!requestingUser || requestingUser.role.name !== "superAdmin") {
-//       console.log("deleteRole: Unauthorized", { userId: req.user.id });
-//       return res.status(403).json({
+//     // Check authentication (middleware handles UserManagement.manageUserRoles permission)
+//     if (!req.user || !req.user.id) {
+//       console.log("deleteRole: Invalid authentication data");
+//       return res.status(401).json({
 //         status: "error",
-//         statusCode: 403,
-//         message: "Only superAdmins can delete roles",
+//         statusCode: 401,
+//         message: "Authentication required",
 //         data: { token: null, role: null },
 //       });
 //     }
@@ -842,6 +831,23 @@
 //         status: "error",
 //         statusCode: 404,
 //         message: "Role not found",
+//         data: { token: null, role: null },
+//       });
+//     }
+
+//     // Prevent non-superAdmins from deleting superAdmin role
+//     const requestingUser = await User.findById(req.user.id).populate("role");
+//     if (
+//       role.name === "superAdmin" &&
+//       requestingUser.role.name !== "superAdmin"
+//     ) {
+//       console.log("deleteRole: Unauthorized to delete superAdmin role", {
+//         userId: req.user.id,
+//       });
+//       return res.status(403).json({
+//         status: "error",
+//         statusCode: 403,
+//         message: "Only superAdmins can delete superAdmin role",
 //         data: { token: null, role: null },
 //       });
 //     }
@@ -882,21 +888,20 @@
 // };
 
 // const resetUserPassword = async (req, res) => {
-//   const { email } = req.body; // Removed newPassword; admin triggers reset link instead
+//   const { email } = req.body;
 //   console.log("resetUserPassword: Request received", {
 //     email,
 //     user: req.user,
 //   });
 
 //   try {
-//     // Validate superAdmin
-//     const requestingUser = await User.findById(req.user.id).populate("role");
-//     if (!requestingUser || requestingUser.role.name !== "superAdmin") {
-//       console.log("resetUserPassword: Unauthorized", { userId: req.user.id });
-//       return res.status(403).json({
+//     // Check authentication (middleware handles UserManagement.manageUserRoles permission)
+//     if (!req.user || !req.user.id) {
+//       console.log("resetUserPassword: Invalid authentication data");
+//       return res.status(401).json({
 //         status: "error",
-//         statusCode: 403,
-//         message: "Only superAdmins can reset user passwords",
+//         statusCode: 401,
+//         message: "Authentication required",
 //         data: { token: null, user: null },
 //       });
 //     }
@@ -951,10 +956,10 @@
 //       email,
 //     });
 
-//     // Send reset email with link (no plain password)
+//     // Send reset email with link
 //     try {
 //       const resetUrl = `${process.env.APP_URL}/reset-password/${resetToken}`;
-//       await new Email(user, resetUrl).sendPasswordReset(); // Adjusted method name
+//       await new Email(user, resetUrl).sendPasswordReset();
 //       console.log("resetUserPassword: Reset email sent", { email });
 //     } catch (emailError) {
 //       console.error(
@@ -980,214 +985,182 @@
 //   }
 // };
 
-// // const updateUser = async (req, res) => {
-// //   const { id } = req.params;
-// //   const { fullName, Department, email, role, status, phoneNumber } = req.body; // Added phoneNumber as example
-// //   console.log("updateUser: Request received", {
-// //     userId: id,
-// //     fullName,
-// //     Department,
-// //     email,
-// //     role,
-// //     status,
-// //     phoneNumber,
-// //     user: req.user,
-// //   });
+// const updateUser = async (req, res) => {
+//   const { id } = req.params;
+//   const { fullName, Department, email, role, status, phoneNumber } = req.body;
+//   console.log("updateUser: Request received", {
+//     userId: id,
+//     fullName,
+//     Department,
+//     email,
+//     role,
+//     status,
+//     phoneNumber,
+//     user: req.user,
+//   });
 
-// //   try {
-// //     // Check authentication
-// //     if (!req.user || !req.user.id) {
-// //       console.log("updateUser: Invalid authentication data");
-// //       return res.status(401).json({
-// //         status: "error",
-// //         statusCode: 401,
-// //         message: "Authentication required",
-// //         data: { token: null, user: null },
-// //       });
-// //     }
+//   try {
+//     // Check authentication
+//     if (!req.user || !req.user.id) {
+//       console.log("updateUser: Invalid authentication data");
+//       return res.status(401).json({
+//         status: "error",
+//         statusCode: 401,
+//         message: "Authentication required",
+//         data: { token: null, user: null },
+//       });
+//     }
 
-// //     // Validate ID
-// //     if (!mongoose.Types.ObjectId.isValid(id)) {
-// //       console.log("updateUser: Invalid user ID", { id });
-// //       return res.status(400).json({
-// //         status: "error",
-// //         statusCode: 400,
-// //         message: "Invalid user ID",
-// //         data: { token: null, user: null },
-// //       });
-// //     }
+//     // Validate ID
+//     if (!mongoose.Types.ObjectId.isValid(id)) {
+//       console.log("updateUser: Invalid user ID", { id });
+//       return res.status(400).json({
+//         status: "error",
+//         statusCode: 400,
+//         message: "Invalid user ID",
+//         data: { token: null, user: null },
+//       });
+//     }
 
-// //     // Restrict to superAdmin, users with manageUserRoles permission, or the user themselves
-// //     const requestingUser = await User.findById(req.user.id).populate("role");
-// //     if (
-// //       requestingUser.role.name !== "superAdmin" &&
-// //       !requestingUser.role.permissions.UserManagement.manageUserRoles &&
-// //       req.user.id !== id
-// //     ) {
-// //       console.log("updateUser: Unauthorized", {
-// //         userId: req.user.id,
-// //         requestedId: id,
-// //       });
-// //       return res.status(403).json({
-// //         status: "error",
-// //         statusCode: 403,
-// //         message: "Unauthorized to update this user",
-// //         data: { token: null, user: null },
-// //       });
-// //     }
+//     // Find user
+//     const user = await User.findById(id);
+//     if (!user) {
+//       console.log("updateUser: User not found", { id });
+//       return res.status(404).json({
+//         status: "error",
+//         statusCode: 404,
+//         message: "User not found",
+//         data: { token: null, user: null },
+//       });
+//     }
 
-// //     // Find user
-// //     const user = await User.findById(id);
-// //     if (!user) {
-// //       console.log("updateUser: User not found", { id });
-// //       return res.status(404).json({
-// //         status: "error",
-// //         statusCode: 404,
-// //         message: "User not found",
-// //         data: { token: null, user: null },
-// //       });
-// //     }
+//     // Validate at least one field is provided
+//     if (
+//       !fullName?.trim() &&
+//       !Department?.trim() &&
+//       !email?.trim() &&
+//       !role &&
+//       !status &&
+//       !phoneNumber?.trim()
+//     ) {
+//       console.log("updateUser: No fields provided", { id });
+//       return res.status(400).json({
+//         status: "error",
+//         statusCode: 400,
+//         message: "At least one field must be provided for update",
+//         data: { token: null, user: null },
+//       });
+//     }
 
-// //     // Validate at least one field is provided
-// //     if (
-// //       !fullName?.trim() &&
-// //       !Department?.trim() &&
-// //       !email?.trim() &&
-// //       !role &&
-// //       !status &&
-// //       !phoneNumber?.trim()
-// //     ) {
-// //       console.log("updateUser: No fields provided", { id });
-// //       return res.status(400).json({
-// //         status: "error",
-// //         statusCode: 400,
-// //         message: "At least one field must be provided for update",
-// //         data: { token: null, user: null },
-// //       });
-// //     }
+//     // Update fields
+//     if (fullName?.trim()) user.fullName = fullName.trim();
+//     if (Department?.trim()) user.Department = Department.trim();
+//     if (phoneNumber?.trim()) user.phoneNumber = phoneNumber.trim();
 
-// //     // Update fields
-// //     if (fullName?.trim()) user.fullName = fullName.trim();
-// //     if (Department?.trim()) user.Department = Department.trim();
-// //     if (phoneNumber?.trim()) user.phoneNumber = phoneNumber.trim();
+//     if (email?.trim()) {
+//       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+//       if (!emailRegex.test(email)) {
+//         console.log("updateUser: Invalid email format", { email });
+//         return res.status(400).json({
+//           status: "error",
+//           statusCode: 400,
+//           message: "Invalid email format",
+//           data: { token: null, user: null },
+//         });
+//       }
+//       if (email !== user.email) {
+//         const existingUser = await User.findOne({ email });
+//         if (existingUser && existingUser._id.toString() !== id) {
+//           console.log("updateUser: Email already exists", { email });
+//           return res.status(400).json({
+//             status: "error",
+//             statusCode: 400,
+//             message: "Email already exists",
+//             data: { token: null, user: null },
+//           });
+//         }
+//         user.email = email.trim();
+//       }
+//     }
 
-// //     if (email?.trim()) {
-// //       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-// //       if (!emailRegex.test(email)) {
-// //         console.log("updateUser: Invalid email format", { email });
-// //         return res.status(400).json({
-// //           status: "error",
-// //           statusCode: 400,
-// //           message: "Invalid email format",
-// //           data: { token: null, user: null },
-// //         });
-// //       }
-// //       if (email !== user.email) {
-// //         const existingUser = await User.findOne({ email });
-// //         if (existingUser && existingUser._id.toString() !== id) {
-// //           console.log("updateUser: Email already exists", { email });
-// //           return res.status(400).json({
-// //             status: "error",
-// //             statusCode: 400,
-// //             message: "Email already exists",
-// //             data: { token: null, user: null },
-// //           });
-// //         }
-// //         user.email = email.trim();
-// //       }
-// //     }
+//     if (role) {
+//       const roleDoc = await Role.findById(role);
+//       if (!roleDoc) {
+//         console.log("updateUser: Role not found", { role });
+//         return res.status(404).json({
+//           status: "error",
+//           statusCode: 404,
+//           message: "Role not found",
+//           data: { token: null, user: null },
+//         });
+//       }
+//       // Prevent non-superAdmins from assigning superAdmin role
+//       const requestingUser = await User.findById(req.user.id).populate("role");
+//       if (
+//         roleDoc.name === "superAdmin" &&
+//         requestingUser.role.name !== "superAdmin"
+//       ) {
+//         console.log("updateUser: Unauthorized to assign superAdmin role", {
+//           userId: req.user.id,
+//         });
+//         return res.status(403).json({
+//           status: "error",
+//           statusCode: 403,
+//           message: "Only superAdmins can assign superAdmin role",
+//           data: { token: null, user: null },
+//         });
+//       }
+//       // Prevent self-escalation
+//       if (req.user.id === id && roleDoc.name === "superAdmin") {
+//         console.log("updateUser: Cannot escalate own role to superAdmin", {
+//           userId: req.user.id,
+//         });
+//         return res.status(403).json({
+//           status: "error",
+//           statusCode: 403,
+//           message: "Cannot escalate your own role to superAdmin",
+//           data: { token: null, user: null },
+//         });
+//       }
+//       user.role = roleDoc._id;
+//     }
 
-// //     if (role) {
-// //       const roleDoc = await Role.findById(role);
-// //       if (!roleDoc) {
-// //         console.log("updateUser: Role not found", { role });
-// //         return res.status(404).json({
-// //           status: "error",
-// //           statusCode: 404,
-// //           message: "Role not found",
-// //           data: { token: null, user: null },
-// //         });
-// //       }
-// //       // Only superAdmin or users with manageUserRoles can change roles
-// //       if (
-// //         requestingUser.role.name !== "superAdmin" &&
-// //         !requestingUser.role.permissions.UserManagement.manageUserRoles
-// //       ) {
-// //         console.log("updateUser: Unauthorized to change role", {
-// //           userId: req.user.id,
-// //         });
-// //         return res.status(403).json({
-// //           status: "error",
-// //           statusCode: 403,
-// //           message:
-// //             "Only superAdmins or users with role management permissions can change roles",
-// //           data: { token: null, user: null },
-// //         });
-// //       }
-// //       // Prevent self-escalation (optional, but good practice)
-// //       if (req.user.id === id && roleDoc.name === "superAdmin") {
-// //         return res.status(403).json({
-// //           status: "error",
-// //           statusCode: 403,
-// //           message: "Cannot escalate your own role",
-// //           data: { token: null, user: null },
-// //         });
-// //       }
-// //       user.role = roleDoc._id;
-// //     }
+//     if (status) {
+//       if (!["Active", "InActive"].includes(status)) {
+//         console.log("updateUser: Invalid status", { status });
+//         return res.status(400).json({
+//           status: "error",
+//           statusCode: 400,
+//           message: "Status must be Active or InActive",
+//           data: { token: null, user: null },
+//         });
+//       }
+//       user.status = status;
+//     }
 
-// //     if (status) {
-// //       if (!["Active", "InActive"].includes(status)) {
-// //         console.log("updateUser: Invalid status", { status });
-// //         return res.status(400).json({
-// //           status: "error",
-// //           statusCode: 400,
-// //           message: "Status must be Active or InActive",
-// //           data: { token: null, user: null },
-// //         });
-// //       }
-// //       // Only superAdmin or users with manageUserRoles can change status
-// //       if (
-// //         requestingUser.role.name !== "superAdmin" &&
-// //         !requestingUser.role.permissions.UserManagement.manageUserRoles
-// //       ) {
-// //         console.log("updateUser: Unauthorized to change status", {
-// //           userId: req.user.id,
-// //         });
-// //         return res.status(403).json({
-// //           status: "error",
-// //           statusCode: 403,
-// //           message:
-// //             "Only superAdmins or users with role management permissions can change user status",
-// //           data: { token: null, user: null },
-// //         });
-// //       }
-// //       user.status = status;
-// //     }
+//     await user.save();
+//     console.log("updateUser: User updated", { userId: id });
 
-// //     await user.save();
-// //     console.log("updateUser: User updated", { userId: id });
+//     const updatedUser = await User.findById(id)
+//       .populate("role")
+//       .select("-password -resetPasswordToken -resetPasswordExpires");
 
-// //     const updatedUser = await User.findById(id)
-// //       .populate("role")
-// //       .select("-password -resetPasswordToken -resetPasswordExpires");
-
-// //     return res.status(200).json({
-// //       status: "success",
-// //       statusCode: 200,
-// //       message: "User updated successfully",
-// //       data: { token: null, user: updatedUser },
-// //     });
-// //   } catch (error) {
-// //     console.error("updateUser: Error", error);
-// //     return res.status(500).json({
-// //       status: "error",
-// //       statusCode: 500,
-// //       message: "Server error during user update",
-// //       data: { token: null, user: null },
-// //     });
-// //   }
-// // };
+//     return res.status(200).json({
+//       status: "success",
+//       statusCode: 200,
+//       message: "User updated successfully",
+//       data: { token: null, user: updatedUser },
+//     });
+//   } catch (error) {
+//     console.error("updateUser: Error", error);
+//     return res.status(500).json({
+//       status: "error",
+//       statusCode: 500,
+//       message: "Server error during user update",
+//       data: { token: null, user: null },
+//     });
+//   }
+// };
 
 // const deactivateUser = async (req, res) => {
 //   const { id } = req.params;
@@ -1215,23 +1188,6 @@
 //         status: "error",
 //         statusCode: 400,
 //         message: "Invalid user ID",
-//         data: { token: null, user: null },
-//       });
-//     }
-
-//     // Restrict to superAdmin or users with manageUserRoles permission
-//     const requestingUser = await User.findById(req.user.id).populate("role");
-//     if (
-//       !requestingUser ||
-//       (requestingUser.role.name !== "superAdmin" &&
-//         !requestingUser.role.permissions.UserManagement.manageUserRoles)
-//     ) {
-//       console.log("deactivateUser: Unauthorized", { userId: req.user.id });
-//       return res.status(403).json({
-//         status: "error",
-//         statusCode: 403,
-//         message:
-//           "Only superAdmins or users with role management permissions can deactivate users",
 //         data: { token: null, user: null },
 //       });
 //     }
@@ -1272,7 +1228,7 @@
 
 //     // Deactivate user
 //     user.status = "InActive";
-//     user.resetPasswordToken = undefined; // Clear any existing reset tokens
+//     user.resetPasswordToken = undefined;
 //     user.resetPasswordExpires = undefined;
 //     await user.save();
 
@@ -1305,7 +1261,7 @@
 //   createUser,
 //   getAllUsers,
 //   getUserById,
-//   // updateUser,
+//   updateUser,
 //   deleteUser,
 //   getUserMetrics,
 //   resetUserPassword,
@@ -1342,7 +1298,7 @@ const createUser = async (req, res) => {
         status: "error",
         statusCode: 401,
         message: "Authentication required",
-        data: { token: null, user: null },
+        data: { user: null },
       });
     }
 
@@ -1366,7 +1322,7 @@ const createUser = async (req, res) => {
         statusCode: 400,
         message:
           "Full name, department, email, password, and phone number are required",
-        data: { token: null, user: null },
+        data: { user: null },
       });
     }
 
@@ -1381,7 +1337,7 @@ const createUser = async (req, res) => {
         status: "error",
         statusCode: 400,
         message: "Invalid email format",
-        data: { token: null, user: null },
+        data: { user: null },
       });
     }
 
@@ -1397,7 +1353,7 @@ const createUser = async (req, res) => {
         status: "error",
         statusCode: 500,
         message: "Email domain validation not configured",
-        data: { token: null, user: null },
+        data: { user: null },
       });
     }
     const emailDomain = normalizedEmail.split("@")[1].toLowerCase();
@@ -1411,7 +1367,7 @@ const createUser = async (req, res) => {
         status: "error",
         statusCode: 400,
         message: `Email domain must be one of: ${allowedDomains.join(", ")}`,
-        data: { token: null, user: null },
+        data: { user: null },
       });
     }
 
@@ -1422,7 +1378,7 @@ const createUser = async (req, res) => {
         status: "error",
         statusCode: 400,
         message: "Role is required",
-        data: { token: null, user: null },
+        data: { user: null },
       });
     }
 
@@ -1433,7 +1389,7 @@ const createUser = async (req, res) => {
         status: "error",
         statusCode: 404,
         message: "Role not found",
-        data: { token: null, user: null },
+        data: { user: null },
       });
     }
 
@@ -1450,7 +1406,7 @@ const createUser = async (req, res) => {
         status: "error",
         statusCode: 403,
         message: "Only superAdmins can assign superAdmin role",
-        data: { token: null, user: null },
+        data: { user: null },
       });
     }
 
@@ -1462,7 +1418,7 @@ const createUser = async (req, res) => {
         status: "error",
         statusCode: 400,
         message: "Email already exists",
-        data: { token: null, user: null },
+        data: { user: null },
       });
     }
 
@@ -1489,7 +1445,7 @@ const createUser = async (req, res) => {
         status: "error",
         statusCode: 500,
         message: "Failed to save user to database",
-        data: { token: null, user: null },
+        data: { user: null },
       });
     }
 
@@ -1549,7 +1505,7 @@ const createUser = async (req, res) => {
       status: "error",
       statusCode: 500,
       message: "Server error during user creation",
-      data: { token: null, user: null },
+      data: { user: null },
     });
   }
 };
@@ -1567,7 +1523,6 @@ const getAllUsers = async (req, res) => {
         statusCode: 401,
         message: "Authentication required",
         data: {
-          token: null,
           user: null,
           users: null,
         },
@@ -1586,7 +1541,6 @@ const getAllUsers = async (req, res) => {
       statusCode: 200,
       message: users.length ? "Users retrieved successfully" : "No users found",
       data: {
-        token: null,
         user: null,
         users,
       },
@@ -1598,7 +1552,6 @@ const getAllUsers = async (req, res) => {
       statusCode: 500,
       message: "Server error during user retrieval",
       data: {
-        token: null,
         user: null,
         users: null,
       },
@@ -1619,7 +1572,6 @@ const getUserById = async (req, res) => {
         statusCode: 401,
         message: "Authentication required",
         data: {
-          token: null,
           user: null,
         },
       });
@@ -1633,7 +1585,6 @@ const getUserById = async (req, res) => {
         statusCode: 400,
         message: "Invalid user ID",
         data: {
-          token: null,
           user: null,
         },
       });
@@ -1651,7 +1602,6 @@ const getUserById = async (req, res) => {
         statusCode: 404,
         message: "User not found",
         data: {
-          token: null,
           user: null,
         },
       });
@@ -1664,7 +1614,6 @@ const getUserById = async (req, res) => {
       statusCode: 200,
       message: "User retrieved successfully",
       data: {
-        token: null,
         user,
       },
     });
@@ -1675,7 +1624,6 @@ const getUserById = async (req, res) => {
       statusCode: 500,
       message: "Server error during user retrieval",
       data: {
-        token: null,
         user: null,
       },
     });
@@ -1695,7 +1643,6 @@ const deleteUser = async (req, res) => {
         statusCode: 401,
         message: "Authentication required",
         data: {
-          token: null,
           user: null,
         },
       });
@@ -1709,7 +1656,6 @@ const deleteUser = async (req, res) => {
         statusCode: 400,
         message: "Invalid user ID",
         data: {
-          token: null,
           user: null,
         },
       });
@@ -1723,7 +1669,6 @@ const deleteUser = async (req, res) => {
         statusCode: 400,
         message: "Cannot delete your own account",
         data: {
-          token: null,
           user: null,
         },
       });
@@ -1737,7 +1682,6 @@ const deleteUser = async (req, res) => {
         statusCode: 404,
         message: "User not found",
         data: {
-          token: null,
           user: null,
         },
       });
@@ -1750,7 +1694,6 @@ const deleteUser = async (req, res) => {
       statusCode: 200,
       message: "User deleted successfully",
       data: {
-        token: null,
         user: null,
       },
     });
@@ -1761,7 +1704,6 @@ const deleteUser = async (req, res) => {
       statusCode: 500,
       message: "Server error during user deletion",
       data: {
-        token: null,
         user: null,
       },
     });
@@ -1779,7 +1721,6 @@ const getUserMetrics = async (req, res) => {
         statusCode: 401,
         message: "Authentication required",
         data: {
-          token: null,
           user: null,
           metrics: null,
         },
@@ -1795,7 +1736,6 @@ const getUserMetrics = async (req, res) => {
       statusCode: 200,
       message: "User metrics retrieved successfully",
       data: {
-        token: null,
         user: null,
         metrics: { totalUsers },
       },
@@ -1807,7 +1747,6 @@ const getUserMetrics = async (req, res) => {
       statusCode: 500,
       message: "Server error during user metrics retrieval",
       data: {
-        token: null,
         user: null,
         metrics: null,
       },
@@ -1822,7 +1761,7 @@ const createRole = async (req, res) => {
       status: "error",
       statusCode: 400,
       message: "Request body is required",
-      data: { token: null, role: null },
+      data: { role: null },
     });
   }
 
@@ -1842,7 +1781,7 @@ const createRole = async (req, res) => {
         status: "error",
         statusCode: 401,
         message: "Authentication required",
-        data: { token: null, role: null },
+        data: { role: null },
       });
     }
 
@@ -1853,7 +1792,7 @@ const createRole = async (req, res) => {
         status: "error",
         statusCode: 400,
         message: "Role name and description are required",
-        data: { token: null, role: null },
+        data: { role: null },
       });
     }
 
@@ -1865,7 +1804,7 @@ const createRole = async (req, res) => {
         status: "error",
         statusCode: 400,
         message: "Role name already exists",
-        data: { token: null, role: null },
+        data: { role: null },
       });
     }
 
@@ -1884,7 +1823,7 @@ const createRole = async (req, res) => {
         statusCode: 403,
         message:
           "Only superAdmins can create superAdmin or manageUserRoles roles",
-        data: { token: null, role: null },
+        data: { role: null },
       });
     }
 
@@ -1934,7 +1873,7 @@ const createRole = async (req, res) => {
       status: "success",
       statusCode: 201,
       message: "Role created successfully",
-      data: { token: null, role },
+      data: { role },
     });
   } catch (error) {
     console.error("createRole: Error", error);
@@ -1942,7 +1881,7 @@ const createRole = async (req, res) => {
       status: "error",
       statusCode: 500,
       message: "Server error during role creation",
-      data: { token: null, role: null },
+      data: { role: null },
     });
   }
 };
@@ -1958,7 +1897,7 @@ const getAllRoles = async (req, res) => {
         status: "error",
         statusCode: 401,
         message: "Authentication required",
-        data: { token: null, roles: null },
+        data: { roles: null },
       });
     }
 
@@ -1969,7 +1908,7 @@ const getAllRoles = async (req, res) => {
       status: "success",
       statusCode: 200,
       message: roles.length ? "Roles retrieved successfully" : "No roles found",
-      data: { token: null, roles },
+      data: { roles },
     });
   } catch (error) {
     console.error("getAllRoles: Error", error);
@@ -1977,7 +1916,7 @@ const getAllRoles = async (req, res) => {
       status: "error",
       statusCode: 500,
       message: "Server error during role retrieval",
-      data: { token: null, roles: null },
+      data: { roles: null },
     });
   }
 };
@@ -2001,7 +1940,7 @@ const updateRole = async (req, res) => {
         status: "error",
         statusCode: 401,
         message: "Authentication required",
-        data: { token: null, role: null },
+        data: { role: null },
       });
     }
 
@@ -2012,7 +1951,7 @@ const updateRole = async (req, res) => {
         status: "error",
         statusCode: 404,
         message: "Role not found",
-        data: { token: null, role: null },
+        data: { role: null },
       });
     }
 
@@ -2033,7 +1972,7 @@ const updateRole = async (req, res) => {
         statusCode: 403,
         message:
           "Only superAdmins can update superAdmin roles or manageUserRoles permissions",
-        data: { token: null, role: null },
+        data: { role: null },
       });
     }
 
@@ -2045,7 +1984,7 @@ const updateRole = async (req, res) => {
           status: "error",
           statusCode: 400,
           message: "Role name already exists",
-          data: { token: null, role: null },
+          data: { role: null },
         });
       }
       role.name = name.trim();
@@ -2113,7 +2052,7 @@ const updateRole = async (req, res) => {
       status: "success",
       statusCode: 200,
       message: "Role updated successfully",
-      data: { token: null, role },
+      data: { role },
     });
   } catch (error) {
     console.error("updateRole: Error", error);
@@ -2121,7 +2060,7 @@ const updateRole = async (req, res) => {
       status: "error",
       statusCode: 500,
       message: "Server error during role update",
-      data: { token: null, role: null },
+      data: { role: null },
     });
   }
 };
@@ -2138,7 +2077,7 @@ const deleteRole = async (req, res) => {
         status: "error",
         statusCode: 401,
         message: "Authentication required",
-        data: { token: null, role: null },
+        data: { role: null },
       });
     }
 
@@ -2149,7 +2088,7 @@ const deleteRole = async (req, res) => {
         status: "error",
         statusCode: 404,
         message: "Role not found",
-        data: { token: null, role: null },
+        data: { role: null },
       });
     }
 
@@ -2166,7 +2105,7 @@ const deleteRole = async (req, res) => {
         status: "error",
         statusCode: 403,
         message: "Only superAdmins can delete superAdmin role",
-        data: { token: null, role: null },
+        data: { role: null },
       });
     }
 
@@ -2181,7 +2120,7 @@ const deleteRole = async (req, res) => {
         status: "error",
         statusCode: 400,
         message: "Cannot delete role assigned to users",
-        data: { token: null, role: null },
+        data: { role: null },
       });
     }
 
@@ -2192,7 +2131,7 @@ const deleteRole = async (req, res) => {
       status: "success",
       statusCode: 200,
       message: "Role deleted successfully",
-      data: { token: null, role: null },
+      data: { role: null },
     });
   } catch (error) {
     console.error("deleteRole: Error", error);
@@ -2200,7 +2139,7 @@ const deleteRole = async (req, res) => {
       status: "error",
       statusCode: 500,
       message: "Server error during role deletion",
-      data: { token: null, role: null },
+      data: { role: null },
     });
   }
 };
@@ -2220,7 +2159,7 @@ const resetUserPassword = async (req, res) => {
         status: "error",
         statusCode: 401,
         message: "Authentication required",
-        data: { token: null, user: null },
+        data: { user: null },
       });
     }
 
@@ -2233,7 +2172,7 @@ const resetUserPassword = async (req, res) => {
         status: "error",
         statusCode: 400,
         message: "Email is required",
-        data: { token: null, user: null },
+        data: { user: null },
       });
     }
 
@@ -2245,7 +2184,7 @@ const resetUserPassword = async (req, res) => {
         status: "error",
         statusCode: 400,
         message: "Invalid email format",
-        data: { token: null, user: null },
+        data: { user: null },
       });
     }
 
@@ -2257,7 +2196,7 @@ const resetUserPassword = async (req, res) => {
         status: "error",
         statusCode: 404,
         message: "User not found",
-        data: { token: null, user: null },
+        data: { user: null },
       });
     }
 
@@ -2290,7 +2229,7 @@ const resetUserPassword = async (req, res) => {
       status: "success",
       statusCode: 200,
       message: "Password reset link sent to user",
-      data: { token: null, user: null },
+      data: { user: null },
     });
   } catch (error) {
     console.error("resetUserPassword: Error", error);
@@ -2298,7 +2237,7 @@ const resetUserPassword = async (req, res) => {
       status: "error",
       statusCode: 500,
       message: "Server error during password reset",
-      data: { token: null, user: null },
+      data: { user: null },
     });
   }
 };
@@ -2325,7 +2264,7 @@ const updateUser = async (req, res) => {
         status: "error",
         statusCode: 401,
         message: "Authentication required",
-        data: { token: null, user: null },
+        data: { user: null },
       });
     }
 
@@ -2336,7 +2275,7 @@ const updateUser = async (req, res) => {
         status: "error",
         statusCode: 400,
         message: "Invalid user ID",
-        data: { token: null, user: null },
+        data: { user: null },
       });
     }
 
@@ -2348,7 +2287,7 @@ const updateUser = async (req, res) => {
         status: "error",
         statusCode: 404,
         message: "User not found",
-        data: { token: null, user: null },
+        data: { user: null },
       });
     }
 
@@ -2366,7 +2305,7 @@ const updateUser = async (req, res) => {
         status: "error",
         statusCode: 400,
         message: "At least one field must be provided for update",
-        data: { token: null, user: null },
+        data: { user: null },
       });
     }
 
@@ -2383,7 +2322,7 @@ const updateUser = async (req, res) => {
           status: "error",
           statusCode: 400,
           message: "Invalid email format",
-          data: { token: null, user: null },
+          data: { user: null },
         });
       }
       if (email !== user.email) {
@@ -2394,7 +2333,7 @@ const updateUser = async (req, res) => {
             status: "error",
             statusCode: 400,
             message: "Email already exists",
-            data: { token: null, user: null },
+            data: { user: null },
           });
         }
         user.email = email.trim();
@@ -2409,7 +2348,7 @@ const updateUser = async (req, res) => {
           status: "error",
           statusCode: 404,
           message: "Role not found",
-          data: { token: null, user: null },
+          data: { user: null },
         });
       }
       // Prevent non-superAdmins from assigning superAdmin role
@@ -2425,7 +2364,7 @@ const updateUser = async (req, res) => {
           status: "error",
           statusCode: 403,
           message: "Only superAdmins can assign superAdmin role",
-          data: { token: null, user: null },
+          data: { user: null },
         });
       }
       // Prevent self-escalation
@@ -2437,7 +2376,7 @@ const updateUser = async (req, res) => {
           status: "error",
           statusCode: 403,
           message: "Cannot escalate your own role to superAdmin",
-          data: { token: null, user: null },
+          data: { user: null },
         });
       }
       user.role = roleDoc._id;
@@ -2450,7 +2389,7 @@ const updateUser = async (req, res) => {
           status: "error",
           statusCode: 400,
           message: "Status must be Active or InActive",
-          data: { token: null, user: null },
+          data: { user: null },
         });
       }
       user.status = status;
@@ -2467,7 +2406,7 @@ const updateUser = async (req, res) => {
       status: "success",
       statusCode: 200,
       message: "User updated successfully",
-      data: { token: null, user: updatedUser },
+      data: { user: updatedUser },
     });
   } catch (error) {
     console.error("updateUser: Error", error);
@@ -2475,7 +2414,7 @@ const updateUser = async (req, res) => {
       status: "error",
       statusCode: 500,
       message: "Server error during user update",
-      data: { token: null, user: null },
+      data: { user: null },
     });
   }
 };
@@ -2495,7 +2434,7 @@ const deactivateUser = async (req, res) => {
         status: "error",
         statusCode: 401,
         message: "Authentication required",
-        data: { token: null, user: null },
+        data: { user: null },
       });
     }
 
@@ -2506,7 +2445,7 @@ const deactivateUser = async (req, res) => {
         status: "error",
         statusCode: 400,
         message: "Invalid user ID",
-        data: { token: null, user: null },
+        data: { user: null },
       });
     }
 
@@ -2517,7 +2456,7 @@ const deactivateUser = async (req, res) => {
         status: "error",
         statusCode: 400,
         message: "Cannot deactivate your own account",
-        data: { token: null, user: null },
+        data: { user: null },
       });
     }
 
@@ -2529,7 +2468,7 @@ const deactivateUser = async (req, res) => {
         status: "error",
         statusCode: 404,
         message: "User not found",
-        data: { token: null, user: null },
+        data: { user: null },
       });
     }
 
@@ -2540,7 +2479,7 @@ const deactivateUser = async (req, res) => {
         status: "error",
         statusCode: 400,
         message: "User is already inactive",
-        data: { token: null, user: null },
+        data: { user: null },
       });
     }
 
@@ -2562,7 +2501,7 @@ const deactivateUser = async (req, res) => {
       status: "success",
       statusCode: 200,
       message: "User deactivated successfully",
-      data: { token: null, user: null },
+      data: { user: null },
     });
   } catch (error) {
     console.error("deactivateUser: Error", error);
@@ -2570,7 +2509,7 @@ const deactivateUser = async (req, res) => {
       status: "error",
       statusCode: 500,
       message: "Server error during user deactivation",
-      data: { token: null, user: null },
+      data: { user: null },
     });
   }
 };

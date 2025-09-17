@@ -9,7 +9,7 @@ const checkPermission = (permissionPath) => async (req, res, next) => {
         status: "error",
         statusCode: 401,
         message: "Authentication required",
-        data: { token: null, user: null },
+        data: { user: null },
       });
     }
 
@@ -22,7 +22,7 @@ const checkPermission = (permissionPath) => async (req, res, next) => {
         status: "error",
         statusCode: 500,
         message: "Server error: Invalid user role",
-        data: { token: null, user: null },
+        data: { user: null },
       });
     }
 
@@ -41,7 +41,7 @@ const checkPermission = (permissionPath) => async (req, res, next) => {
         status: "error",
         statusCode: 403,
         message: "Invalid role permissions",
-        data: { token: null, user: null },
+        data: { user: null },
       });
     }
 
@@ -55,7 +55,7 @@ const checkPermission = (permissionPath) => async (req, res, next) => {
         status: "error",
         statusCode: 400,
         message: "Invalid permission path format",
-        data: { token: null, user: null },
+        data: { user: null },
       });
     }
 
@@ -68,7 +68,7 @@ const checkPermission = (permissionPath) => async (req, res, next) => {
         status: "error",
         statusCode: 403,
         message: `Unauthorized: ${permissionPath} permission required`,
-        data: { token: null, user: null },
+        data: { user: null },
       });
     }
 
@@ -82,7 +82,7 @@ const checkPermission = (permissionPath) => async (req, res, next) => {
       status: "error",
       statusCode: 500,
       message: "Server error during permission check",
-      data: { token: null, user: null },
+      data: { user: null },
     });
   }
 };

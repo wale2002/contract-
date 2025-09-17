@@ -23,7 +23,7 @@ const validateDocumentUpload = (req, res, next) => {
       status: "error",
       statusCode: 400,
       message: "Document name is required",
-      data: { token: null, user: null, document: null },
+      data: { user: null, document: null },
     });
   }
 
@@ -36,7 +36,7 @@ const validateDocumentUpload = (req, res, next) => {
       status: "error",
       statusCode: 400,
       message: "Invalid document type",
-      data: { token: null, user: null, document: null },
+      data: { user: null, document: null },
     });
   }
 
@@ -48,7 +48,7 @@ const validateDocumentUpload = (req, res, next) => {
         status: "error",
         statusCode: 400,
         message: "Invalid start date format",
-        data: { token: null, user: null, document: null },
+        data: { user: null, document: null },
       });
     }
   }
@@ -61,7 +61,7 @@ const validateDocumentUpload = (req, res, next) => {
         status: "error",
         statusCode: 400,
         message: "Invalid expiry date format",
-        data: { token: null, user: null, document: null },
+        data: { user: null, document: null },
       });
     }
     // Ensure expiryDate is after startDate if both provided
@@ -72,7 +72,7 @@ const validateDocumentUpload = (req, res, next) => {
           status: "error",
           statusCode: 400,
           message: "Expiry date must be after start date",
-          data: { token: null, user: null, document: null },
+          data: { user: null, document: null },
         });
       }
     }
