@@ -1101,7 +1101,6 @@ const getNotifications = async (req, res) => {
     });
   }
 };
-
 const getDocuments = async (req, res) => {
   const { orgId } = req.params;
   console.log("getDocuments: Request received", { orgId, user: req.user });
@@ -1151,10 +1150,33 @@ const getDocuments = async (req, res) => {
     //   });
     // }
 
-    const documents = await Document.find({ organization: orgId }).select(
-      "name documentType createdAt isApproved approvedBy startDate expiryDate"
-    );
-    console.log("getDocuments: Found documents", { count: documents.length });
+    const { page = 1, limit = 10 } = req.query;
+    const pageNum = parseInt(page, 10);
+    const limitNum = parseInt(limit, 10);
+
+    if (isNaN(pageNum) || pageNum < 1 || isNaN(limitNum) || limitNum < 1) {
+      return res.status(400).json({
+        status: "error",
+        statusCode: 400,
+        message: "Invalid page or limit parameters",
+        data: { user: null, documents: null },
+      });
+    }
+
+    const query = { organization: orgId };
+
+    const documents = await Document.find(query)
+      .select("name documentType createdAt isApproved approvedBy startDate expiryDate")
+      .skip((pageNum - 1) * limitNum)
+      .limit(limitNum);
+
+    const total = await Document.countDocuments(query);
+
+    console.log("getDocuments: Found documents", {
+      count: documents.length,
+      total,
+      page: pageNum,
+    });
 
     return res.status(200).json({
       status: "success",
@@ -1165,6 +1187,9 @@ const getDocuments = async (req, res) => {
       data: {
         user: null,
         documents,
+        total,
+        page: pageNum,
+        totalPages: Math.ceil(total / limitNum),
       },
     });
   } catch (error) {
@@ -1177,6 +1202,81 @@ const getDocuments = async (req, res) => {
     });
   }
 };
+// const getDocuments = async (req, res) => {
+//   const { orgId } = req.params;
+//   console.log("getDocuments: Request received", { orgId, user: req.user });
+
+//   try {
+//     // Skip re-fetch if middleware populates req.user fully; otherwise, fetch minimally
+//     const user = await User.findById(req.user.id)
+//       .select("organization")
+//       .populate("role"); // Only select needed fields
+
+//     if (!user) {
+//       console.log("getDocuments: User not found", { userId: req.user.id });
+//       return res.status(404).json({
+//         status: "error",
+//         statusCode: 404,
+//         message: "User not found",
+//         data: { user: null, documents: null },
+//       });
+//     }
+
+//     const organization = await Organization.findById(orgId);
+//     if (!organization) {
+//       console.log("getDocuments: Organization not found", { orgId });
+//       return res.status(404).json({
+//         status: "error",
+//         statusCode: 404,
+//         message: "Organization not found",
+//         data: { user: null, documents: null },
+//       });
+//     }
+
+//     // Removed organization check to allow viewing documents in any organization
+//     // if (user.role?.name !== "superAdmin" && user.organization?.toString() !== orgId) {
+//     //   console.log(
+//     //     "getDocuments: User not in organization",
+//     //     {
+//     //       userId: req.user.id,
+//     //       orgId,
+//     //       userOrg: user.organization ? user.organization.toString() : "null/missing",
+//     //     }
+//     //   );
+//     //   return res.status(403).json({
+//     //     status: "error",
+//     //     statusCode: 403,
+//     //     message: "Unauthorized to view documents in this organization",
+//     //     data: { user: null, documents: null },
+//     //   });
+//     // }
+
+//     const documents = await Document.find({ organization: orgId }).select(
+//       "name documentType createdAt isApproved approvedBy startDate expiryDate"
+//     );
+//     console.log("getDocuments: Found documents", { count: documents.length });
+
+//     return res.status(200).json({
+//       status: "success",
+//       statusCode: 200,
+//       message: documents.length
+//         ? "Documents retrieved successfully"
+//         : "No documents found",
+//       data: {
+//         user: null,
+//         documents,
+//       },
+//     });
+//   } catch (error) {
+//     console.error("getDocuments: Error", error);
+//     return res.status(500).json({
+//       status: "error",
+//       statusCode: 500,
+//       message: "Server error during document retrieval",
+//       data: { user: null, documents: null },
+//     });
+//   }
+// };
 
 const uploadDocument = async (req, res) => {
   const { orgId } = req.params;

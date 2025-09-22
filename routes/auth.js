@@ -8,7 +8,7 @@ router.post("/request-reset", authController.requestResetPassword);
 router.post("/reset-password", authController.resetPassword);
 router.post("/logout", authController.logout);
 router.get("/me", authController.getMe);
-router.put("/:userId", authMiddleware, authController.updateUser);
+// router.put("/:userId", authMiddleware, authController.updateUser);
 router.get("/", authMiddleware, authController.getAuditLogs);
 
 module.exports = router;

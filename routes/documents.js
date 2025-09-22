@@ -114,7 +114,7 @@ const { upload } = require("../config/cloudinaryStorage");
 const documentController = require("../controllers/documentController");
 
 router.get(
-  "/:orgId",
+  "/:orgId/documents",
   authMiddleware,
   checkPermission("DocumentManagement.viewDocuments"),
   documentController.getDocuments

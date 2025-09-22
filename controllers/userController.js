@@ -1279,6 +1279,8 @@ const Email = require("../utils/email");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
+const AuditLog = require("../models/AuditLog");
+const validTimezones = require("moment-timezone").tz.names();
 
 const createUser = async (req, res) => {
   const { fullName, Department, email, password, role, phoneNumber, status } =
@@ -1509,8 +1511,6 @@ const createUser = async (req, res) => {
     });
   }
 };
-
-// getAllUsers remains unchanged as it is already correct
 const getAllUsers = async (req, res) => {
   console.log("getAllUsers: Request received", { user: req.user });
 
@@ -1529,12 +1529,63 @@ const getAllUsers = async (req, res) => {
       });
     }
 
-    // Fetch users (middleware already checked UserManagement.viewUsers permission)
-    const users = await User.find()
-      .populate("role")
-      .select("-password -resetPasswordToken -resetPasswordExpires");
+    const { page = 1, limit = 10, search, status, role } = req.query;
+    const pageNum = parseInt(page, 10);
+    const limitNum = parseInt(limit, 10);
 
-    console.log("getAllUsers: Users retrieved", { count: users.length });
+    if (isNaN(pageNum) || pageNum < 1 || isNaN(limitNum) || limitNum < 1) {
+      return res.status(400).json({
+        status: "error",
+        statusCode: 400,
+        message: "Invalid page or limit parameters",
+        data: {
+          user: null,
+          users: null,
+        },
+      });
+    }
+
+    let query = {};
+    if (search && search.trim()) {
+      query.$or = [
+        { fullName: { $regex: search.trim(), $options: "i" } },
+        { email: { $regex: search.trim(), $options: "i" } },
+        { Department: { $regex: search.trim(), $options: "i" } },
+      ];
+    }
+    if (status && ["Active", "InActive"].includes(status)) {
+      query.status = status;
+    }
+    if (role) {
+      // Assuming role is ObjectId; if name, would need to find Role first
+      if (!mongoose.Types.ObjectId.isValid(role)) {
+        return res.status(400).json({
+          status: "error",
+          statusCode: 400,
+          message: "Invalid role ID",
+          data: {
+            user: null,
+            users: null,
+          },
+        });
+      }
+      query.role = role;
+    }
+
+    // Fetch users (middleware already checked UserManagement.viewUsers permission)
+    const users = await User.find(query)
+      .populate("role")
+      .select("-password -resetPasswordToken -resetPasswordExpires")
+      .skip((pageNum - 1) * limitNum)
+      .limit(limitNum);
+
+    const total = await User.countDocuments(query);
+
+    console.log("getAllUsers: Users retrieved", {
+      count: users.length,
+      total,
+      page: pageNum,
+    });
 
     return res.status(200).json({
       status: "success",
@@ -1543,6 +1594,9 @@ const getAllUsers = async (req, res) => {
       data: {
         user: null,
         users,
+        total,
+        page: pageNum,
+        totalPages: Math.ceil(total / limitNum),
       },
     });
   } catch (error) {
@@ -1558,6 +1612,54 @@ const getAllUsers = async (req, res) => {
     });
   }
 };
+// getAllUsers remains unchanged as it is already correct
+// const getAllUsers = async (req, res) => {
+//   console.log("getAllUsers: Request received", { user: req.user });
+
+//   try {
+//     // Check authentication
+//     if (!req.user || !req.user.id) {
+//       console.log("getAllUsers: Invalid authentication data");
+//       return res.status(401).json({
+//         status: "error",
+//         statusCode: 401,
+//         message: "Authentication required",
+//         data: {
+//           user: null,
+//           users: null,
+//         },
+//       });
+//     }
+
+//     // Fetch users (middleware already checked UserManagement.viewUsers permission)
+//     const users = await User.find()
+//       .populate("role")
+//       .select("-password -resetPasswordToken -resetPasswordExpires");
+
+//     console.log("getAllUsers: Users retrieved", { count: users.length });
+
+//     return res.status(200).json({
+//       status: "success",
+//       statusCode: 200,
+//       message: users.length ? "Users retrieved successfully" : "No users found",
+//       data: {
+//         user: null,
+//         users,
+//       },
+//     });
+//   } catch (error) {
+//     console.error("getAllUsers: Error", error);
+//     return res.status(500).json({
+//       status: "error",
+//       statusCode: 500,
+//       message: "Server error during user retrieval",
+//       data: {
+//         user: null,
+//         users: null,
+//       },
+//     });
+//   }
+// };
 
 const getUserById = async (req, res) => {
   const { id } = req.params;
@@ -1754,6 +1856,138 @@ const getUserMetrics = async (req, res) => {
   }
 };
 
+// const createRole = async (req, res) => {
+//   if (!req.body) {
+//     console.log("createRole: No request body provided");
+//     return res.status(400).json({
+//       status: "error",
+//       statusCode: 400,
+//       message: "Request body is required",
+//       data: { role: null },
+//     });
+//   }
+
+//   const { name, description, permissions } = req.body;
+//   console.log("createRole: Request received", {
+//     name,
+//     description,
+//     permissions,
+//     user: req.user,
+//   });
+
+//   try {
+//     // Check authentication (middleware handles UserManagement.manageUserRoles permission)
+//     if (!req.user || !req.user.id) {
+//       console.log("createRole: Invalid authentication data");
+//       return res.status(401).json({
+//         status: "error",
+//         statusCode: 401,
+//         message: "Authentication required",
+//         data: { role: null },
+//       });
+//     }
+
+//     // Validate inputs
+//     if (!name?.trim() || !description?.trim()) {
+//       console.log("createRole: Missing required fields", { name, description });
+//       return res.status(400).json({
+//         status: "error",
+//         statusCode: 400,
+//         message: "Role name and description are required",
+//         data: { role: null },
+//       });
+//     }
+
+//     // Check for existing role
+//     const existingRole = await Role.findOne({ name });
+//     if (existingRole) {
+//       console.log("createRole: Role already exists", { name });
+//       return res.status(400).json({
+//         status: "error",
+//         statusCode: 400,
+//         message: "Role name already exists",
+//         data: { role: null },
+//       });
+//     }
+
+//     // Prevent non-superAdmins from creating superAdmin role or roles with manageUserRoles
+//     const requestingUser = await User.findById(req.user.id).populate("role");
+//     if (
+//       (name === "superAdmin" || permissions?.UserManagement?.manageUserRoles) &&
+//       requestingUser.role.name !== "superAdmin"
+//     ) {
+//       console.log(
+//         "createRole: Unauthorized to create superAdmin or manageUserRoles role",
+//         { userId: req.user.id }
+//       );
+//       return res.status(403).json({
+//         status: "error",
+//         statusCode: 403,
+//         message:
+//           "Only superAdmins can create superAdmin or manageUserRoles roles",
+//         data: { role: null },
+//       });
+//     }
+
+//     // Create new role
+//     const role = new Role({
+//       name,
+//       description,
+//       permissions: {
+//         UserManagement: {
+//           viewUsers: permissions?.UserManagement?.viewUsers || false,
+//           createUsers: permissions?.UserManagement?.createUsers || false,
+//           editUsers: permissions?.UserManagement?.editUsers || false,
+//           deleteUsers: permissions?.UserManagement?.deleteUsers || false,
+//           manageUserRoles:
+//             permissions?.UserManagement?.manageUserRoles || false,
+//         },
+//         DocumentManagement: {
+//           viewDocuments:
+//             permissions?.DocumentManagement?.viewDocuments || false,
+//           uploadDocuments:
+//             permissions?.DocumentManagement?.uploadDocuments || false,
+//           editDocuments:
+//             permissions?.DocumentManagement?.editDocuments || false,
+//           deleteDocuments:
+//             permissions?.DocumentManagement?.deleteDocuments || false,
+//           approveDocuments:
+//             permissions?.DocumentManagement?.approveDocuments || false,
+//         },
+//         OrganizationManagement: {
+//           viewOrganizations:
+//             permissions?.OrganizationManagement?.viewOrganizations || false,
+//           createOrganizations:
+//             permissions?.OrganizationManagement?.createOrganizations || false,
+//           editOrganizations:
+//             permissions?.OrganizationManagement?.editOrganizations || false,
+//           deleteOrganizations:
+//             permissions?.OrganizationManagement?.deleteOrganizations || false,
+//         },
+//       },
+//       createdBy: req.user.id,
+//     });
+
+//     await role.save();
+//     console.log("createRole: Role created", { roleId: role._id, name });
+
+//     return res.status(201).json({
+//       status: "success",
+//       statusCode: 201,
+//       message: "Role created successfully",
+//       data: { role },
+//     });
+//   } catch (error) {
+//     console.error("createRole: Error", error);
+//     return res.status(500).json({
+//       status: "error",
+//       statusCode: 500,
+//       message: "Server error during role creation",
+//       data: { role: null },
+//     });
+//   }
+// };
+
 const createRole = async (req, res) => {
   if (!req.body) {
     console.log("createRole: No request body provided");
@@ -1869,11 +2103,37 @@ const createRole = async (req, res) => {
     await role.save();
     console.log("createRole: Role created", { roleId: role._id, name });
 
+    // Find similar roles (exact match on permissions object) and sum users assigned to them
+    const similarRoles = await Role.find({
+      permissions: role.permissions, // Exact match on the entire permissions object
+      _id: { $ne: role._id }, // Exclude the newly created role itself
+    });
+
+    let usersAssigned = 0;
+    for (const similarRole of similarRoles) {
+      const count = await User.countDocuments({ role: similarRole._id });
+      usersAssigned += count;
+    }
+
+    // Count total true permissions
+    let totalPermissions = 0;
+    const permKeys = Object.keys(role.permissions);
+    permKeys.forEach((key) => {
+      const subPerms = role.permissions[key];
+      Object.values(subPerms).forEach((value) => {
+        if (value === true) totalPermissions++;
+      });
+    });
+
     return res.status(201).json({
       status: "success",
       statusCode: 201,
       message: "Role created successfully",
-      data: { role },
+      data: {
+        role,
+        usersAssigned,
+        totalPermissions,
+      },
     });
   } catch (error) {
     console.error("createRole: Error", error);
@@ -2242,24 +2502,215 @@ const resetUserPassword = async (req, res) => {
   }
 };
 
+// const updateUser = async (req, res) => {
+//   const { id } = req.params;
+//   const { fullName, Department, email, role, status, phoneNumber } = req.body;
+//   console.log("updateUser: Request received", {
+//     userId: id,
+//     fullName,
+//     Department,
+//     email,
+//     role,
+//     status,
+//     phoneNumber,
+//     user: req.user,
+//   });
+
+//   try {
+//     // Check authentication
+//     if (!req.user || !req.user.id) {
+//       console.log("updateUser: Invalid authentication data");
+//       return res.status(401).json({
+//         status: "error",
+//         statusCode: 401,
+//         message: "Authentication required",
+//         data: { user: null },
+//       });
+//     }
+
+//     // Validate ID
+//     if (!mongoose.Types.ObjectId.isValid(id)) {
+//       console.log("updateUser: Invalid user ID", { id });
+//       return res.status(400).json({
+//         status: "error",
+//         statusCode: 400,
+//         message: "Invalid user ID",
+//         data: { user: null },
+//       });
+//     }
+
+//     // Find user
+//     const user = await User.findById(id);
+//     if (!user) {
+//       console.log("updateUser: User not found", { id });
+//       return res.status(404).json({
+//         status: "error",
+//         statusCode: 404,
+//         message: "User not found",
+//         data: { user: null },
+//       });
+//     }
+
+//     // Validate at least one field is provided
+//     if (
+//       !fullName?.trim() &&
+//       !Department?.trim() &&
+//       !email?.trim() &&
+//       !role &&
+//       !status &&
+//       !phoneNumber?.trim()
+//     ) {
+//       console.log("updateUser: No fields provided", { id });
+//       return res.status(400).json({
+//         status: "error",
+//         statusCode: 400,
+//         message: "At least one field must be provided for update",
+//         data: { user: null },
+//       });
+//     }
+
+//     // Update fields
+//     if (fullName?.trim()) user.fullName = fullName.trim();
+//     if (Department?.trim()) user.Department = Department.trim();
+//     if (phoneNumber?.trim()) user.phoneNumber = phoneNumber.trim();
+
+//     if (email?.trim()) {
+//       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+//       if (!emailRegex.test(email)) {
+//         console.log("updateUser: Invalid email format", { email });
+//         return res.status(400).json({
+//           status: "error",
+//           statusCode: 400,
+//           message: "Invalid email format",
+//           data: { user: null },
+//         });
+//       }
+//       if (email !== user.email) {
+//         const existingUser = await User.findOne({ email });
+//         if (existingUser && existingUser._id.toString() !== id) {
+//           console.log("updateUser: Email already exists", { email });
+//           return res.status(400).json({
+//             status: "error",
+//             statusCode: 400,
+//             message: "Email already exists",
+//             data: { user: null },
+//           });
+//         }
+//         user.email = email.trim();
+//       }
+//     }
+
+//     if (role) {
+//       const roleDoc = await Role.findById(role);
+//       if (!roleDoc) {
+//         console.log("updateUser: Role not found", { role });
+//         return res.status(404).json({
+//           status: "error",
+//           statusCode: 404,
+//           message: "Role not found",
+//           data: { user: null },
+//         });
+//       }
+//       // Prevent non-superAdmins from assigning superAdmin role
+//       const requestingUser = await User.findById(req.user.id).populate("role");
+//       if (
+//         roleDoc.name === "superAdmin" &&
+//         requestingUser.role.name !== "superAdmin"
+//       ) {
+//         console.log("updateUser: Unauthorized to assign superAdmin role", {
+//           userId: req.user.id,
+//         });
+//         return res.status(403).json({
+//           status: "error",
+//           statusCode: 403,
+//           message: "Only superAdmins can assign superAdmin role",
+//           data: { user: null },
+//         });
+//       }
+//       // Prevent self-escalation
+//       if (req.user.id === id && roleDoc.name === "superAdmin") {
+//         console.log("updateUser: Cannot escalate own role to superAdmin", {
+//           userId: req.user.id,
+//         });
+//         return res.status(403).json({
+//           status: "error",
+//           statusCode: 403,
+//           message: "Cannot escalate your own role to superAdmin",
+//           data: { user: null },
+//         });
+//       }
+//       user.role = roleDoc._id;
+//     }
+
+//     if (status) {
+//       if (!["Active", "InActive"].includes(status)) {
+//         console.log("updateUser: Invalid status", { status });
+//         return res.status(400).json({
+//           status: "error",
+//           statusCode: 400,
+//           message: "Status must be Active or InActive",
+//           data: { user: null },
+//         });
+//       }
+//       user.status = status;
+//     }
+
+//     await user.save();
+//     console.log("updateUser: User updated", { userId: id });
+
+//     const updatedUser = await User.findById(id)
+//       .populate("role")
+//       .select("-password -resetPasswordToken -resetPasswordExpires");
+
+//     return res.status(200).json({
+//       status: "success",
+//       statusCode: 200,
+//       message: "User updated successfully",
+//       data: { user: updatedUser },
+//     });
+//   } catch (error) {
+//     console.error("updateUser: Error", error);
+//     return res.status(500).json({
+//       status: "error",
+//       statusCode: 500,
+//       message: "Server error during user update",
+//       data: { user: null },
+//     });
+//   }
+// };
 const updateUser = async (req, res) => {
-  const { id } = req.params;
-  const { fullName, Department, email, role, status, phoneNumber } = req.body;
-  console.log("updateUser: Request received", {
-    userId: id,
+  const { id } = req.params; // For admin updates (/users/:id)
+  const isSelfUpdate = req.path.endsWith("/profile"); // Detect self-update route
+  let targetUserId = id;
+
+  const {
     fullName,
+    firstName,
+    lastName,
     Department,
     email,
+    phoneNumber,
+    profilePicture,
+    jobTitle,
+    location,
+    timezone,
+    language,
+    dateFormat,
+    organization,
     role,
     status,
-    phoneNumber,
-    user: req.user,
+  } = req.body;
+
+  console.log("updateUser: Request received", {
+    userId: targetUserId || "self",
+    isSelfUpdate,
+    requestedUpdates: req.body,
+    requesterId: req.user?.id,
   });
 
   try {
     // Check authentication
     if (!req.user || !req.user.id) {
-      console.log("updateUser: Invalid authentication data");
       return res.status(401).json({
         status: "error",
         statusCode: 401,
@@ -2268,9 +2719,13 @@ const updateUser = async (req, res) => {
       });
     }
 
-    // Validate ID
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      console.log("updateUser: Invalid user ID", { id });
+    // For self-update, set targetUserId to req.user.id
+    if (isSelfUpdate) {
+      targetUserId = req.user.id;
+    }
+
+    // Validate user ID (skip for pure self-update)
+    if (!isSelfUpdate && !mongoose.Types.ObjectId.isValid(targetUserId)) {
       return res.status(400).json({
         status: "error",
         statusCode: 400,
@@ -2279,10 +2734,9 @@ const updateUser = async (req, res) => {
       });
     }
 
-    // Find user
-    const user = await User.findById(id);
+    // Find target user
+    const user = await User.findById(targetUserId);
     if (!user) {
-      console.log("updateUser: User not found", { id });
       return res.status(404).json({
         status: "error",
         statusCode: 404,
@@ -2291,33 +2745,160 @@ const updateUser = async (req, res) => {
       });
     }
 
-    // Validate at least one field is provided
-    if (
-      !fullName?.trim() &&
-      !Department?.trim() &&
-      !email?.trim() &&
-      !role &&
-      !status &&
-      !phoneNumber?.trim()
-    ) {
-      console.log("updateUser: No fields provided", { id });
-      return res.status(400).json({
+    // Fetch requester's full role for permission checks (if not self-update)
+    let requestingUser = null;
+    if (!isSelfUpdate) {
+      requestingUser = await User.findById(req.user.id).populate("role");
+      const hasUpdatePermission =
+        requestingUser.role?.permissions?.UserManagement?.editUsers || false;
+      if (!hasUpdatePermission) {
+        return res.status(403).json({
+          status: "error",
+          statusCode: 403,
+          message: "Insufficient permissions to update this user",
+          data: { user: null },
+        });
+      }
+    }
+
+    // For self-update, block role/status changes
+    if (isSelfUpdate && (role !== undefined || status !== undefined)) {
+      return res.status(403).json({
         status: "error",
-        statusCode: 400,
-        message: "At least one field must be provided for update",
+        statusCode: 403,
+        message: "Cannot update role or status in self-update",
         data: { user: null },
       });
     }
 
-    // Update fields
-    if (fullName?.trim()) user.fullName = fullName.trim();
-    if (Department?.trim()) user.Department = Department.trim();
-    if (phoneNumber?.trim()) user.phoneNumber = phoneNumber.trim();
+    // Validate at least one field is provided
+    const updates = {
+      fullName,
+      firstName,
+      lastName,
+      Department,
+      email,
+      phoneNumber,
+      profilePicture,
+      jobTitle,
+      location,
+      timezone,
+      language,
+      dateFormat,
+      organization,
+      role,
+      status,
+    };
+    const hasValidField = Object.values(updates).some(
+      (value) => value !== undefined && value !== null && value !== ""
+    );
+    if (!hasValidField) {
+      return res.status(400).json({
+        status: "error",
+        statusCode: 400,
+        message: "At least one valid field must be provided for update",
+        data: { user: null },
+      });
+    }
 
+    // Track changes for audit logging
+    const changes = {};
+
+    // Update fields with validation (same as authController's version)
+    if (fullName?.trim()) {
+      changes.fullName = { old: user.fullName, new: fullName.trim() };
+      user.fullName = fullName.trim();
+    }
+    if (firstName?.trim()) {
+      changes.firstName = { old: user.firstName, new: firstName.trim() };
+      user.firstName = firstName.trim();
+    }
+    if (lastName?.trim()) {
+      changes.lastName = { old: user.lastName, new: lastName.trim() };
+      user.lastName = lastName.trim();
+    }
+    if (Department?.trim()) {
+      changes.Department = { old: user.Department, new: Department.trim() };
+      user.Department = Department.trim();
+    }
+    if (phoneNumber?.trim()) {
+      const phoneRegex = /^\+?[\d\s-]{10,}$/;
+      if (!phoneRegex.test(phoneNumber.trim())) {
+        return res.status(400).json({
+          status: "error",
+          statusCode: 400,
+          message: "Invalid phone number format",
+          data: { user: null },
+        });
+      }
+      changes.phoneNumber = { old: user.phoneNumber, new: phoneNumber.trim() };
+      user.phoneNumber = phoneNumber.trim();
+    }
+    if (profilePicture?.trim()) {
+      const urlRegex = /^https?:\/\/[^\s/$.?#].[^\s]*$/;
+      if (!urlRegex.test(profilePicture.trim())) {
+        return res.status(400).json({
+          status: "error",
+          statusCode: 400,
+          message: "Invalid profile picture URL",
+          data: { user: null },
+        });
+      }
+      changes.profilePicture = {
+        old: user.profilePicture,
+        new: profilePicture.trim(),
+      };
+      user.profilePicture = profilePicture.trim();
+    }
+    if (jobTitle?.trim()) {
+      changes.jobTitle = { old: user.jobTitle, new: jobTitle.trim() };
+      user.jobTitle = jobTitle.trim();
+    }
+    if (location?.trim()) {
+      changes.location = { old: user.location, new: location.trim() };
+      user.location = location.trim();
+    }
+    if (timezone?.trim()) {
+      if (!validTimezones.includes(timezone.trim())) {
+        return res.status(400).json({
+          status: "error",
+          statusCode: 400,
+          message: "Invalid timezone",
+          data: { user: null },
+        });
+      }
+      changes.timezone = { old: user.timezone, new: timezone.trim() };
+      user.timezone = timezone.trim();
+    }
+    if (language?.trim()) {
+      const validLanguages = ["en", "es", "fr", "de", "it"];
+      if (!validLanguages.includes(language.trim())) {
+        return res.status(400).json({
+          status: "error",
+          statusCode: 400,
+          message: "Invalid language code",
+          data: { user: null },
+        });
+      }
+      changes.language = { old: user.language, new: language.trim() };
+      user.language = language.trim();
+    }
+    if (dateFormat?.trim()) {
+      const validDateFormats = ["MM/DD/YYYY", "DD/MM/YYYY", "YYYY-MM-DD"];
+      if (!validDateFormats.includes(dateFormat.trim())) {
+        return res.status(400).json({
+          status: "error",
+          statusCode: 400,
+          message: "Invalid date format",
+          data: { user: null },
+        });
+      }
+      changes.dateFormat = { old: user.dateFormat, new: dateFormat.trim() };
+      user.dateFormat = dateFormat.trim();
+    }
     if (email?.trim()) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email)) {
-        console.log("updateUser: Invalid email format", { email });
+      if (!emailRegex.test(email.trim())) {
         return res.status(400).json({
           status: "error",
           statusCode: 400,
@@ -2325,10 +2906,13 @@ const updateUser = async (req, res) => {
           data: { user: null },
         });
       }
-      if (email !== user.email) {
-        const existingUser = await User.findOne({ email });
-        if (existingUser && existingUser._id.toString() !== id) {
-          console.log("updateUser: Email already exists", { email });
+      const normalizedEmail = email.trim().toLowerCase();
+      if (normalizedEmail !== user.email) {
+        const existingUser = await User.findOne({ email: normalizedEmail });
+        if (
+          existingUser &&
+          existingUser._id.toString() !== user._id.toString()
+        ) {
           return res.status(400).json({
             status: "error",
             statusCode: 400,
@@ -2336,80 +2920,113 @@ const updateUser = async (req, res) => {
             data: { user: null },
           });
         }
-        user.email = email.trim();
+        changes.email = { old: user.email, new: normalizedEmail };
+        user.email = normalizedEmail;
       }
     }
-
-    if (role) {
-      const roleDoc = await Role.findById(role);
-      if (!roleDoc) {
-        console.log("updateUser: Role not found", { role });
-        return res.status(404).json({
-          status: "error",
-          statusCode: 404,
-          message: "Role not found",
-          data: { user: null },
-        });
-      }
-      // Prevent non-superAdmins from assigning superAdmin role
-      const requestingUser = await User.findById(req.user.id).populate("role");
-      if (
-        roleDoc.name === "superAdmin" &&
-        requestingUser.role.name !== "superAdmin"
-      ) {
-        console.log("updateUser: Unauthorized to assign superAdmin role", {
-          userId: req.user.id,
-        });
-        return res.status(403).json({
-          status: "error",
-          statusCode: 403,
-          message: "Only superAdmins can assign superAdmin role",
-          data: { user: null },
-        });
-      }
-      // Prevent self-escalation
-      if (req.user.id === id && roleDoc.name === "superAdmin") {
-        console.log("updateUser: Cannot escalate own role to superAdmin", {
-          userId: req.user.id,
-        });
-        return res.status(403).json({
-          status: "error",
-          statusCode: 403,
-          message: "Cannot escalate your own role to superAdmin",
-          data: { user: null },
-        });
-      }
-      user.role = roleDoc._id;
-    }
-
-    if (status) {
-      if (!["Active", "InActive"].includes(status)) {
-        console.log("updateUser: Invalid status", { status });
+    if (organization && organization !== user.organization?.toString()) {
+      if (!mongoose.Types.ObjectId.isValid(organization)) {
         return res.status(400).json({
           status: "error",
           statusCode: 400,
-          message: "Status must be Active or InActive",
+          message: "Invalid organization ID",
           data: { user: null },
         });
       }
-      user.status = status;
+      changes.organization = { old: user.organization, new: organization };
+      user.organization = organization;
     }
 
-    await user.save();
-    console.log("updateUser: User updated", { userId: id });
+    // Admin-only fields (role, status) - only if not self-update
+    if (!isSelfUpdate) {
+      if (role && role !== user.role?.toString()) {
+        if (!mongoose.Types.ObjectId.isValid(role)) {
+          return res.status(400).json({
+            status: "error",
+            statusCode: 400,
+            message: "Invalid role ID",
+            data: { user: null },
+          });
+        }
+        const roleDoc = await Role.findById(role);
+        if (!roleDoc) {
+          return res.status(404).json({
+            status: "error",
+            statusCode: 404,
+            message: "Role not found",
+            data: { user: null },
+          });
+        }
+        // Prevent non-superAdmins from assigning superAdmin
+        if (
+          roleDoc.name === "superAdmin" &&
+          requestingUser.role.name !== "superAdmin"
+        ) {
+          return res.status(403).json({
+            status: "error",
+            statusCode: 403,
+            message: "Only superAdmins can assign superAdmin role",
+            data: { user: null },
+          });
+        }
+        changes.role = { old: user.role, new: role };
+        user.role = role;
+      }
+      if (status && status !== user.status) {
+        if (!["Active", "InActive"].includes(status)) {
+          return res.status(400).json({
+            status: "error",
+            statusCode: 400,
+            message: "Invalid status",
+            data: { user: null },
+          });
+        }
+        changes.status = { old: user.status, new: status };
+        user.status = status;
+      }
+    }
 
-    const updatedUser = await User.findById(id)
+    // Save if changes were made
+    if (Object.keys(changes).length > 0) {
+      await user.save();
+
+      // Create audit log
+      await AuditLog.create({
+        user: req.user.id,
+        action: "UPDATE_USER",
+        resource: "User",
+        resourceId: user._id,
+        details: { changes, updatedBy: req.user.id, isSelfUpdate },
+        timestamp: new Date(),
+      });
+
+      console.log("updateUser: User updated and audit logged", {
+        userId: targetUserId,
+        changes: Object.keys(changes),
+      });
+    } else {
+      console.log("updateUser: No changes to save", { userId: targetUserId });
+    }
+
+    // Fetch updated user with populated role
+    const updatedUser = await User.findById(targetUserId)
       .populate("role")
-      .select("-password -resetPasswordToken -resetPasswordExpires");
+      .select("-password -resetPasswordToken -resetPasswordExpires")
+      .lean();
 
     return res.status(200).json({
       status: "success",
       statusCode: 200,
-      message: "User updated successfully",
+      message: Object.keys(changes).length
+        ? "User updated successfully"
+        : "No changes applied",
       data: { user: updatedUser },
     });
   } catch (error) {
-    console.error("updateUser: Error", error);
+    console.error("updateUser: Error", {
+      message: error.message,
+      stack: error.stack,
+    });
     return res.status(500).json({
       status: "error",
       statusCode: 500,
@@ -2418,7 +3035,6 @@ const updateUser = async (req, res) => {
     });
   }
 };
-
 const deactivateUser = async (req, res) => {
   const { id } = req.params;
   console.log("deactivateUser: Request received", {

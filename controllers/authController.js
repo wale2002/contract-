@@ -1684,382 +1684,382 @@ const changePassword = async (req, res) => {
 // Update own user profile (accessible to all authenticated users)
 // Assuming User model is imported
 
-const updateUser = async (req, res) => {
-  const userIdParam = req.params.userId; // From route, e.g., /users/:userId or /profile
-  let targetUserId = userIdParam;
+// const updateUser = async (req, res) => {
+//   const userIdParam = req.params.userId; // From route, e.g., /users/:userId or /profile
+//   let targetUserId = userIdParam;
 
-  const {
-    fullName,
-    firstName,
-    lastName,
-    Department,
-    email,
-    phoneNumber,
-    profilePicture,
-    jobTitle,
-    location,
-    timezone,
-    language,
-    dateFormat,
-    organization,
-    role,
-    status,
-  } = req.body;
+//   const {
+//     fullName,
+//     firstName,
+//     lastName,
+//     Department,
+//     email,
+//     phoneNumber,
+//     profilePicture,
+//     jobTitle,
+//     location,
+//     timezone,
+//     language,
+//     dateFormat,
+//     organization,
+//     role,
+//     status,
+//   } = req.body;
 
-  console.log("updateUser: Request received", {
-    userId: userIdParam,
-    requestedUpdates: {
-      fullName,
-      firstName,
-      lastName,
-      Department,
-      email,
-      phoneNumber,
-      profilePicture,
-      jobTitle,
-      location,
-      timezone,
-      language,
-      dateFormat,
-      organization,
-      role,
-      status,
-    },
-    requesterId: req.user?.id,
-  });
+//   console.log("updateUser: Request received", {
+//     userId: userIdParam,
+//     requestedUpdates: {
+//       fullName,
+//       firstName,
+//       lastName,
+//       Department,
+//       email,
+//       phoneNumber,
+//       profilePicture,
+//       jobTitle,
+//       location,
+//       timezone,
+//       language,
+//       dateFormat,
+//       organization,
+//       role,
+//       status,
+//     },
+//     requesterId: req.user?.id,
+//   });
 
-  try {
-    // Check authentication
-    if (!req.user || !req.user.id) {
-      console.log("updateUser: Invalid authentication data");
-      return res.status(401).json({
-        status: "error",
-        statusCode: 401,
-        message: "Authentication required",
-        data: { user: null },
-      });
-    }
+//   try {
+//     // Check authentication
+//     if (!req.user || !req.user.id) {
+//       console.log("updateUser: Invalid authentication data");
+//       return res.status(401).json({
+//         status: "error",
+//         statusCode: 401,
+//         message: "Authentication required",
+//         data: { user: null },
+//       });
+//     }
 
-    // Handle self-update for /profile
-    if (userIdParam === "profile") {
-      targetUserId = req.user.id;
-    }
+//     // Handle self-update for /profile
+//     if (userIdParam === "profile") {
+//       targetUserId = req.user.id;
+//     }
 
-    // Validate user ID
-    if (!mongoose.Types.ObjectId.isValid(targetUserId)) {
-      console.log("updateUser: Invalid user ID", { id: targetUserId });
-      return res.status(400).json({
-        status: "error",
-        statusCode: 400,
-        message: "Invalid user ID",
-        data: { user: null },
-      });
-    }
+//     // Validate user ID
+//     if (!mongoose.Types.ObjectId.isValid(targetUserId)) {
+//       console.log("updateUser: Invalid user ID", { id: targetUserId });
+//       return res.status(400).json({
+//         status: "error",
+//         statusCode: 400,
+//         message: "Invalid user ID",
+//         data: { user: null },
+//       });
+//     }
 
-    // Find target user
-    const user = await User.findById(targetUserId);
-    if (!user) {
-      console.log("updateUser: User not found", { id: targetUserId });
-      return res.status(404).json({
-        status: "error",
-        statusCode: 404,
-        message: "User not found",
-        data: { user: null },
-      });
-    }
+//     // Find target user
+//     const user = await User.findById(targetUserId);
+//     if (!user) {
+//       console.log("updateUser: User not found", { id: targetUserId });
+//       return res.status(404).json({
+//         status: "error",
+//         statusCode: 404,
+//         message: "User not found",
+//         data: { user: null },
+//       });
+//     }
 
-    // Permission check
-    const isSelfUpdate = targetUserId === req.user.id;
-    const hasUpdatePermission =
-      req.user.role?.permissions?.UserManagement?.editUsers || false;
+//     // Permission check
+//     const isSelfUpdate = targetUserId === req.user.id;
+//     const hasUpdatePermission =
+//       req.user.role?.permissions?.UserManagement?.editUsers || false;
 
-    if (!isSelfUpdate && !hasUpdatePermission) {
-      console.log("updateUser: Insufficient permissions", {
-        id: targetUserId,
-        requesterId: req.user.id,
-      });
-      return res.status(403).json({
-        status: "error",
-        statusCode: 403,
-        message: "Insufficient permissions to update this user",
-        data: { user: null },
-      });
-    }
+//     if (!isSelfUpdate && !hasUpdatePermission) {
+//       console.log("updateUser: Insufficient permissions", {
+//         id: targetUserId,
+//         requesterId: req.user.id,
+//       });
+//       return res.status(403).json({
+//         status: "error",
+//         statusCode: 403,
+//         message: "Insufficient permissions to update this user",
+//         data: { user: null },
+//       });
+//     }
 
-    // Restrict role/status for self-update
-    if (isSelfUpdate && (role !== undefined || status !== undefined)) {
-      console.log("updateUser: Cannot update role or status in self-update", {
-        id: targetUserId,
-      });
-      return res.status(403).json({
-        status: "error",
-        statusCode: 403,
-        message: "Cannot update role or status in profile update",
-        data: { user: null },
-      });
-    }
+//     // Restrict role/status for self-update
+//     if (isSelfUpdate && (role !== undefined || status !== undefined)) {
+//       console.log("updateUser: Cannot update role or status in self-update", {
+//         id: targetUserId,
+//       });
+//       return res.status(403).json({
+//         status: "error",
+//         statusCode: 403,
+//         message: "Cannot update role or status in profile update",
+//         data: { user: null },
+//       });
+//     }
 
-    // Validate at least one field is provided
-    const updates = {
-      fullName,
-      firstName,
-      lastName,
-      Department,
-      email,
-      phoneNumber,
-      profilePicture,
-      jobTitle,
-      location,
-      timezone,
-      language,
-      dateFormat,
-      organization,
-      role,
-      status,
-    };
-    const hasValidField = Object.values(updates).some(
-      (value) => value !== undefined && value !== null && value !== ""
-    );
-    if (!hasValidField) {
-      console.log("updateUser: No valid fields provided", { id: targetUserId });
-      return res.status(400).json({
-        status: "error",
-        statusCode: 400,
-        message: "At least one valid field must be provided for update",
-        data: { user: null },
-      });
-    }
+//     // Validate at least one field is provided
+//     const updates = {
+//       fullName,
+//       firstName,
+//       lastName,
+//       Department,
+//       email,
+//       phoneNumber,
+//       profilePicture,
+//       jobTitle,
+//       location,
+//       timezone,
+//       language,
+//       dateFormat,
+//       organization,
+//       role,
+//       status,
+//     };
+//     const hasValidField = Object.values(updates).some(
+//       (value) => value !== undefined && value !== null && value !== ""
+//     );
+//     if (!hasValidField) {
+//       console.log("updateUser: No valid fields provided", { id: targetUserId });
+//       return res.status(400).json({
+//         status: "error",
+//         statusCode: 400,
+//         message: "At least one valid field must be provided for update",
+//         data: { user: null },
+//       });
+//     }
 
-    // Track changes for audit logging
-    const changes = {};
+//     // Track changes for audit logging
+//     const changes = {};
 
-    // Update fields with validation
-    if (fullName?.trim()) {
-      changes.fullName = { old: user.fullName, new: fullName.trim() };
-      user.fullName = fullName.trim();
-    }
-    if (firstName?.trim()) {
-      changes.firstName = { old: user.firstName, new: firstName.trim() };
-      user.firstName = firstName.trim();
-    }
-    if (lastName?.trim()) {
-      changes.lastName = { old: user.lastName, new: lastName.trim() };
-      user.lastName = lastName.trim();
-    }
-    if (Department?.trim()) {
-      changes.Department = { old: user.Department, new: Department.trim() };
-      user.Department = Department.trim();
-    }
-    if (phoneNumber?.trim()) {
-      const phoneRegex = /^\+?[\d\s-]{10,}$/;
-      if (!phoneRegex.test(phoneNumber.trim())) {
-        console.log("updateUser: Invalid phone number", { phoneNumber });
-        return res.status(400).json({
-          status: "error",
-          statusCode: 400,
-          message: "Invalid phone number format",
-          data: { user: null },
-        });
-      }
-      changes.phoneNumber = { old: user.phoneNumber, new: phoneNumber.trim() };
-      user.phoneNumber = phoneNumber.trim();
-    }
-    if (profilePicture?.trim()) {
-      // Basic URL validation for profile picture
-      const urlRegex = /^https?:\/\/[^\s/$.?#].[^\s]*$/;
-      if (!urlRegex.test(profilePicture.trim())) {
-        console.log("updateUser: Invalid profile picture URL", {
-          profilePicture,
-        });
-        return res.status(400).json({
-          status: "error",
-          statusCode: 400,
-          message: "Invalid profile picture URL",
-          data: { user: null },
-        });
-      }
-      changes.profilePicture = {
-        old: user.profilePicture,
-        new: profilePicture.trim(),
-      };
-      user.profilePicture = profilePicture.trim();
-    }
-    if (jobTitle?.trim()) {
-      changes.jobTitle = { old: user.jobTitle, new: jobTitle.trim() };
-      user.jobTitle = jobTitle.trim();
-    }
-    if (location?.trim()) {
-      changes.location = { old: user.location, new: location.trim() };
-      user.location = location.trim();
-    }
-    if (timezone?.trim()) {
-      if (!validTimezones.includes(timezone.trim())) {
-        console.log("updateUser: Invalid timezone", { timezone });
-        return res.status(400).json({
-          status: "error",
-          statusCode: 400,
-          message: "Invalid timezone",
-          data: { user: null },
-        });
-      }
-      changes.timezone = { old: user.timezone, new: timezone.trim() };
-      user.timezone = timezone.trim();
-    }
-    if (language?.trim()) {
-      const validLanguages = ["en", "es", "fr", "de", "it"];
-      if (!validLanguages.includes(language.trim())) {
-        console.log("updateUser: Invalid language", { language });
-        return res.status(400).json({
-          status: "error",
-          statusCode: 400,
-          message: "Invalid language code",
-          data: { user: null },
-        });
-      }
-      changes.language = { old: user.language, new: language.trim() };
-      user.language = language.trim();
-    }
-    if (dateFormat?.trim()) {
-      const validDateFormats = ["MM/DD/YYYY", "DD/MM/YYYY", "YYYY-MM-DD"];
-      if (!validDateFormats.includes(dateFormat.trim())) {
-        console.log("updateUser: Invalid date format", { dateFormat });
-        return res.status(400).json({
-          status: "error",
-          statusCode: 400,
-          message: "Invalid date format",
-          data: { user: null },
-        });
-      }
-      changes.dateFormat = { old: user.dateFormat, new: dateFormat.trim() };
-      user.dateFormat = dateFormat.trim();
-    }
-    if (email?.trim()) {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email.trim())) {
-        console.log("updateUser: Invalid email format", { email });
-        return res.status(400).json({
-          status: "error",
-          statusCode: 400,
-          message: "Invalid email format",
-          data: { user: null },
-        });
-      }
-      const normalizedEmail = email.trim().toLowerCase();
-      if (normalizedEmail !== user.email) {
-        const existingUser = await User.findOne({ email: normalizedEmail });
-        if (
-          existingUser &&
-          existingUser._id.toString() !== user._id.toString()
-        ) {
-          console.log("updateUser: Email already exists", { email });
-          return res.status(400).json({
-            status: "error",
-            statusCode: 400,
-            message: "Email already exists",
-            data: { user: null },
-          });
-        }
-        changes.email = { old: user.email, new: normalizedEmail };
-        user.email = normalizedEmail;
-      }
-    }
-    if (organization && organization !== user.organization?.toString()) {
-      if (!mongoose.Types.ObjectId.isValid(organization)) {
-        console.log("updateUser: Invalid organization ID", { organization });
-        return res.status(400).json({
-          status: "error",
-          statusCode: 400,
-          message: "Invalid organization ID",
-          data: { user: null },
-        });
-      }
-      changes.organization = { old: user.organization, new: organization };
-      user.organization = organization;
-    }
+//     // Update fields with validation
+//     if (fullName?.trim()) {
+//       changes.fullName = { old: user.fullName, new: fullName.trim() };
+//       user.fullName = fullName.trim();
+//     }
+//     if (firstName?.trim()) {
+//       changes.firstName = { old: user.firstName, new: firstName.trim() };
+//       user.firstName = firstName.trim();
+//     }
+//     if (lastName?.trim()) {
+//       changes.lastName = { old: user.lastName, new: lastName.trim() };
+//       user.lastName = lastName.trim();
+//     }
+//     if (Department?.trim()) {
+//       changes.Department = { old: user.Department, new: Department.trim() };
+//       user.Department = Department.trim();
+//     }
+//     if (phoneNumber?.trim()) {
+//       const phoneRegex = /^\+?[\d\s-]{10,}$/;
+//       if (!phoneRegex.test(phoneNumber.trim())) {
+//         console.log("updateUser: Invalid phone number", { phoneNumber });
+//         return res.status(400).json({
+//           status: "error",
+//           statusCode: 400,
+//           message: "Invalid phone number format",
+//           data: { user: null },
+//         });
+//       }
+//       changes.phoneNumber = { old: user.phoneNumber, new: phoneNumber.trim() };
+//       user.phoneNumber = phoneNumber.trim();
+//     }
+//     if (profilePicture?.trim()) {
+//       // Basic URL validation for profile picture
+//       const urlRegex = /^https?:\/\/[^\s/$.?#].[^\s]*$/;
+//       if (!urlRegex.test(profilePicture.trim())) {
+//         console.log("updateUser: Invalid profile picture URL", {
+//           profilePicture,
+//         });
+//         return res.status(400).json({
+//           status: "error",
+//           statusCode: 400,
+//           message: "Invalid profile picture URL",
+//           data: { user: null },
+//         });
+//       }
+//       changes.profilePicture = {
+//         old: user.profilePicture,
+//         new: profilePicture.trim(),
+//       };
+//       user.profilePicture = profilePicture.trim();
+//     }
+//     if (jobTitle?.trim()) {
+//       changes.jobTitle = { old: user.jobTitle, new: jobTitle.trim() };
+//       user.jobTitle = jobTitle.trim();
+//     }
+//     if (location?.trim()) {
+//       changes.location = { old: user.location, new: location.trim() };
+//       user.location = location.trim();
+//     }
+//     if (timezone?.trim()) {
+//       if (!validTimezones.includes(timezone.trim())) {
+//         console.log("updateUser: Invalid timezone", { timezone });
+//         return res.status(400).json({
+//           status: "error",
+//           statusCode: 400,
+//           message: "Invalid timezone",
+//           data: { user: null },
+//         });
+//       }
+//       changes.timezone = { old: user.timezone, new: timezone.trim() };
+//       user.timezone = timezone.trim();
+//     }
+//     if (language?.trim()) {
+//       const validLanguages = ["en", "es", "fr", "de", "it"];
+//       if (!validLanguages.includes(language.trim())) {
+//         console.log("updateUser: Invalid language", { language });
+//         return res.status(400).json({
+//           status: "error",
+//           statusCode: 400,
+//           message: "Invalid language code",
+//           data: { user: null },
+//         });
+//       }
+//       changes.language = { old: user.language, new: language.trim() };
+//       user.language = language.trim();
+//     }
+//     if (dateFormat?.trim()) {
+//       const validDateFormats = ["MM/DD/YYYY", "DD/MM/YYYY", "YYYY-MM-DD"];
+//       if (!validDateFormats.includes(dateFormat.trim())) {
+//         console.log("updateUser: Invalid date format", { dateFormat });
+//         return res.status(400).json({
+//           status: "error",
+//           statusCode: 400,
+//           message: "Invalid date format",
+//           data: { user: null },
+//         });
+//       }
+//       changes.dateFormat = { old: user.dateFormat, new: dateFormat.trim() };
+//       user.dateFormat = dateFormat.trim();
+//     }
+//     if (email?.trim()) {
+//       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+//       if (!emailRegex.test(email.trim())) {
+//         console.log("updateUser: Invalid email format", { email });
+//         return res.status(400).json({
+//           status: "error",
+//           statusCode: 400,
+//           message: "Invalid email format",
+//           data: { user: null },
+//         });
+//       }
+//       const normalizedEmail = email.trim().toLowerCase();
+//       if (normalizedEmail !== user.email) {
+//         const existingUser = await User.findOne({ email: normalizedEmail });
+//         if (
+//           existingUser &&
+//           existingUser._id.toString() !== user._id.toString()
+//         ) {
+//           console.log("updateUser: Email already exists", { email });
+//           return res.status(400).json({
+//             status: "error",
+//             statusCode: 400,
+//             message: "Email already exists",
+//             data: { user: null },
+//           });
+//         }
+//         changes.email = { old: user.email, new: normalizedEmail };
+//         user.email = normalizedEmail;
+//       }
+//     }
+//     if (organization && organization !== user.organization?.toString()) {
+//       if (!mongoose.Types.ObjectId.isValid(organization)) {
+//         console.log("updateUser: Invalid organization ID", { organization });
+//         return res.status(400).json({
+//           status: "error",
+//           statusCode: 400,
+//           message: "Invalid organization ID",
+//           data: { user: null },
+//         });
+//       }
+//       changes.organization = { old: user.organization, new: organization };
+//       user.organization = organization;
+//     }
 
-    // Admin-only fields
-    if (!isSelfUpdate && hasUpdatePermission) {
-      if (role && role !== user.role?.toString()) {
-        if (!mongoose.Types.ObjectId.isValid(role)) {
-          console.log("updateUser: Invalid role ID", { role });
-          return res.status(400).json({
-            status: "error",
-            statusCode: 400,
-            message: "Invalid role ID",
-            data: { user: null },
-          });
-        }
-        changes.role = { old: user.role, new: role };
-        user.role = role;
-      }
-      if (status && status !== user.status) {
-        if (!["Active", "InActive"].includes(status)) {
-          console.log("updateUser: Invalid status", { status });
-          return res.status(400).json({
-            status: "error",
-            statusCode: 400,
-            message: "Invalid status",
-            data: { user: null },
-          });
-        }
-        changes.status = { old: user.status, new: status };
-        user.status = status;
-      }
-    }
+//     // Admin-only fields
+//     if (!isSelfUpdate && hasUpdatePermission) {
+//       if (role && role !== user.role?.toString()) {
+//         if (!mongoose.Types.ObjectId.isValid(role)) {
+//           console.log("updateUser: Invalid role ID", { role });
+//           return res.status(400).json({
+//             status: "error",
+//             statusCode: 400,
+//             message: "Invalid role ID",
+//             data: { user: null },
+//           });
+//         }
+//         changes.role = { old: user.role, new: role };
+//         user.role = role;
+//       }
+//       if (status && status !== user.status) {
+//         if (!["Active", "InActive"].includes(status)) {
+//           console.log("updateUser: Invalid status", { status });
+//           return res.status(400).json({
+//             status: "error",
+//             statusCode: 400,
+//             message: "Invalid status",
+//             data: { user: null },
+//           });
+//         }
+//         changes.status = { old: user.status, new: status };
+//         user.status = status;
+//       }
+//     }
 
-    // Save user and create audit log if changes were made
-    if (Object.keys(changes).length > 0) {
-      await user.save();
+//     // Save user and create audit log if changes were made
+//     if (Object.keys(changes).length > 0) {
+//       await user.save();
 
-      // Create audit log
-      await AuditLog.create({
-        user: req.user.id,
-        action: "UPDATE_USER",
-        resource: "User",
-        resourceId: user._id,
-        details: {
-          changes,
-          updatedBy: req.user.id,
-          isSelfUpdate,
-        },
-        timestamp: new Date(),
-      });
+//       // Create audit log
+//       await AuditLog.create({
+//         user: req.user.id,
+//         action: "UPDATE_USER",
+//         resource: "User",
+//         resourceId: user._id,
+//         details: {
+//           changes,
+//           updatedBy: req.user.id,
+//           isSelfUpdate,
+//         },
+//         timestamp: new Date(),
+//       });
 
-      console.log("updateUser: User updated and audit logged", {
-        userId: targetUserId,
-        changes: Object.keys(changes),
-      });
-    } else {
-      console.log("updateUser: No changes to save", { userId: targetUserId });
-    }
+//       console.log("updateUser: User updated and audit logged", {
+//         userId: targetUserId,
+//         changes: Object.keys(changes),
+//       });
+//     } else {
+//       console.log("updateUser: No changes to save", { userId: targetUserId });
+//     }
 
-    // Fetch updated user with populated role
-    const updatedUser = await User.findById(targetUserId)
-      .populate("role")
-      .select("-password -resetPasswordToken -resetPasswordExpires")
-      .lean();
+//     // Fetch updated user with populated role
+//     const updatedUser = await User.findById(targetUserId)
+//       .populate("role")
+//       .select("-password -resetPasswordToken -resetPasswordExpires")
+//       .lean();
 
-    return res.status(200).json({
-      status: "success",
-      statusCode: 200,
-      message: Object.keys(changes).length
-        ? "User updated successfully"
-        : "No changes applied",
-      data: { user: updatedUser },
-    });
-  } catch (error) {
-    console.error("updateUser: Error", {
-      message: error.message,
-      stack: error.stack,
-    });
-    return res.status(500).json({
-      status: "error",
-      statusCode: 500,
-      message: "Server error during user update",
-      data: { user: null },
-    });
-  }
-};
+//     return res.status(200).json({
+//       status: "success",
+//       statusCode: 200,
+//       message: Object.keys(changes).length
+//         ? "User updated successfully"
+//         : "No changes applied",
+//       data: { user: updatedUser },
+//     });
+//   } catch (error) {
+//     console.error("updateUser: Error", {
+//       message: error.message,
+//       stack: error.stack,
+//     });
+//     return res.status(500).json({
+//       status: "error",
+//       statusCode: 500,
+//       message: "Server error during user update",
+//       data: { user: null },
+//     });
+//   }
+// };
 
 module.exports = {
   getAuditLogs,
@@ -2068,6 +2068,6 @@ module.exports = {
   requestResetPassword,
   resetPassword,
   getMe,
-  updateUser,
+  // updateUser,
   changePassword,
 };
