@@ -31,25 +31,69 @@ const getOrganizations = async (req, res) => {
       });
     }
 
-    let query = {};
+    let matchQuery = {};
     if (search && search.trim()) {
-      query.$or = [
+      matchQuery.$or = [
         { name: { $regex: search.trim(), $options: "i" } },
         { organizationType: { $regex: search.trim(), $options: "i" } },
       ];
     }
 
-    const organizations = await Organization.find(query)
-      .select("name organizationType createdAt")
-      .skip((pageNum - 1) * limitNum)
-      .limit(limitNum);
+    // Use aggregation to fetch paginated organizations with per-org document counts
+    const organizationsAgg = await Organization.aggregate([
+      { $match: matchQuery },
+      {
+        $lookup: {
+          from: "documents", // Adjust if your Document collection name differs (e.g., 'documents')
+          localField: "_id",
+          foreignField: "organization",
+          as: "docs",
+          pipeline: [{ $count: "count" }],
+        },
+      },
+      {
+        $addFields: {
+          documentCount: { $ifNull: [{ $arrayElemAt: ["$docs.count", 0] }, 0] },
+        },
+      },
+      {
+        $project: {
+          name: 1,
+          organizationType: 1,
+          createdAt: 1,
+          documentCount: 1,
+        },
+      },
+      { $skip: (pageNum - 1) * limitNum },
+      { $limit: limitNum },
+    ]);
 
-    const total = await Organization.countDocuments(query);
+    const total = await Organization.countDocuments(matchQuery);
+
+    // Total documents across *all* matching organizations (full query set, not just current page)
+    let totalDocuments = 0;
+    if (total > 0) {
+      const allMatchingOrgs = await Organization.find(matchQuery).select("_id");
+      const allOrgIds = allMatchingOrgs.map((org) => org._id);
+      totalDocuments = await Document.countDocuments({
+        organization: { $in: allOrgIds },
+      });
+    }
+
+    // Map aggregation results to response format
+    const organizations = organizationsAgg.map((org) => ({
+      _id: org._id,
+      name: org.name,
+      organizationType: org.organizationType,
+      createdAt: org.createdAt,
+      documentCount: org.documentCount,
+    }));
 
     console.log("getOrganizations: Found organizations", {
       count: organizations.length,
       total,
       page: pageNum,
+      totalDocuments,
     });
 
     return res.status(200).json({
@@ -62,6 +106,7 @@ const getOrganizations = async (req, res) => {
         user: null,
         organizations,
         total,
+        // totalDocuments,
         page: pageNum,
         totalPages: Math.ceil(total / limitNum),
       },
@@ -76,6 +121,79 @@ const getOrganizations = async (req, res) => {
     });
   }
 };
+// const getOrganizations = async (req, res) => {
+//   console.log("getOrganizations: Request received", { user: req.user });
+
+//   try {
+//     // Check authentication (middleware handles OrganizationManagement.viewOrganizations permission)
+//     if (!req.user || !req.user.id) {
+//       console.log("getOrganizations: Invalid authentication data");
+//       return res.status(401).json({
+//         status: "error",
+//         statusCode: 401,
+//         message: "Authentication required",
+//         data: { user: null, organizations: null },
+//       });
+//     }
+
+//     const { page = 1, limit = 10, search } = req.query;
+//     const pageNum = parseInt(page, 10);
+//     const limitNum = parseInt(limit, 10);
+
+//     if (isNaN(pageNum) || pageNum < 1 || isNaN(limitNum) || limitNum < 1) {
+//       return res.status(400).json({
+//         status: "error",
+//         statusCode: 400,
+//         message: "Invalid page or limit parameters",
+//         data: { user: null, organizations: null },
+//       });
+//     }
+
+//     let query = {};
+//     if (search && search.trim()) {
+//       query.$or = [
+//         { name: { $regex: search.trim(), $options: "i" } },
+//         { organizationType: { $regex: search.trim(), $options: "i" } },
+//       ];
+//     }
+
+//     const organizations = await Organization.find(query)
+//       .select("name organizationType createdAt")
+//       .skip((pageNum - 1) * limitNum)
+//       .limit(limitNum);
+
+//     const total = await Organization.countDocuments(query);
+
+//     console.log("getOrganizations: Found organizations", {
+//       count: organizations.length,
+//       total,
+//       page: pageNum,
+//     });
+
+//     return res.status(200).json({
+//       status: "success",
+//       statusCode: 200,
+//       message: organizations.length
+//         ? "Organizations retrieved successfully"
+//         : "No organizations found",
+//       data: {
+//         user: null,
+//         organizations,
+//         total,
+//         page: pageNum,
+//         totalPages: Math.ceil(total / limitNum),
+//       },
+//     });
+//   } catch (error) {
+//     console.error("getOrganizations: Error", error);
+//     return res.status(500).json({
+//       status: "error",
+//       statusCode: 500,
+//       message: "Server error during organization retrieval",
+//       data: { user: null, organizations: null },
+//     });
+//   }
+// };
 // const getOrganizations = async (req, res) => {
 //   console.log("getOrganizations: Request received", { user: req.user });
 
