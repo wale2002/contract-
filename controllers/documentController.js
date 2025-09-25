@@ -1101,6 +1101,7 @@ const getNotifications = async (req, res) => {
     });
   }
 };
+
 const getDocuments = async (req, res) => {
   const { orgId } = req.params;
   console.log("getDocuments: Request received", { orgId, user: req.user });
@@ -1166,14 +1167,40 @@ const getDocuments = async (req, res) => {
     const query = { organization: orgId };
 
     const documents = await Document.find(query)
-      .select("name documentType createdAt isApproved approvedBy startDate expiryDate")
+      .select(
+        "name documentType createdAt isApproved approvedBy startDate expiryDate fileUrl"
+      )
       .skip((pageNum - 1) * limitNum)
       .limit(limitNum);
 
     const total = await Document.countDocuments(query);
 
+    // Function to get file size in MB from URL
+    const getFileSizeMB = (url) => {
+      return new Promise((resolve) => {
+        const req = https.request(url, { method: "HEAD" }, (res) => {
+          const contentLength = res.headers["content-length"];
+          const sizeInBytes = contentLength ? parseInt(contentLength, 10) : 0;
+          resolve((sizeInBytes / (1024 * 1024)).toFixed(2));
+        });
+        req.on("error", () => resolve("0.00"));
+        req.end();
+      });
+    };
+
+    // Add sizeMB to each document
+    const documentsWithSize = await Promise.all(
+      documents.map(async (doc) => {
+        const sizeMB = await getFileSizeMB(doc.fileUrl);
+        return {
+          ...doc.toObject(),
+          sizeMB: parseFloat(sizeMB),
+        };
+      })
+    );
+
     console.log("getDocuments: Found documents", {
-      count: documents.length,
+      count: documentsWithSize.length,
       total,
       page: pageNum,
     });
@@ -1181,12 +1208,12 @@ const getDocuments = async (req, res) => {
     return res.status(200).json({
       status: "success",
       statusCode: 200,
-      message: documents.length
+      message: documentsWithSize.length
         ? "Documents retrieved successfully"
         : "No documents found",
       data: {
         user: null,
-        documents,
+        documents: documentsWithSize,
         total,
         page: pageNum,
         totalPages: Math.ceil(total / limitNum),
@@ -1202,6 +1229,107 @@ const getDocuments = async (req, res) => {
     });
   }
 };
+// const getDocuments = async (req, res) => {
+//   const { orgId } = req.params;
+//   console.log("getDocuments: Request received", { orgId, user: req.user });
+
+//   try {
+//     // Skip re-fetch if middleware populates req.user fully; otherwise, fetch minimally
+//     const user = await User.findById(req.user.id)
+//       .select("organization")
+//       .populate("role"); // Only select needed fields
+
+//     if (!user) {
+//       console.log("getDocuments: User not found", { userId: req.user.id });
+//       return res.status(404).json({
+//         status: "error",
+//         statusCode: 404,
+//         message: "User not found",
+//         data: { user: null, documents: null },
+//       });
+//     }
+
+//     const organization = await Organization.findById(orgId);
+//     if (!organization) {
+//       console.log("getDocuments: Organization not found", { orgId });
+//       return res.status(404).json({
+//         status: "error",
+//         statusCode: 404,
+//         message: "Organization not found",
+//         data: { user: null, documents: null },
+//       });
+//     }
+
+//     // Removed organization check to allow viewing documents in any organization
+//     // if (user.role?.name !== "superAdmin" && user.organization?.toString() !== orgId) {
+//     //   console.log(
+//     //     "getDocuments: User not in organization",
+//     //     {
+//     //       userId: req.user.id,
+//     //       orgId,
+//     //       userOrg: user.organization ? user.organization.toString() : "null/missing",
+//     //     }
+//     //   );
+//     //   return res.status(403).json({
+//     //     status: "error",
+//     //     statusCode: 403,
+//     //     message: "Unauthorized to view documents in this organization",
+//     //     data: { user: null, documents: null },
+//     //   });
+//     // }
+
+//     const { page = 1, limit = 10 } = req.query;
+//     const pageNum = parseInt(page, 10);
+//     const limitNum = parseInt(limit, 10);
+
+//     if (isNaN(pageNum) || pageNum < 1 || isNaN(limitNum) || limitNum < 1) {
+//       return res.status(400).json({
+//         status: "error",
+//         statusCode: 400,
+//         message: "Invalid page or limit parameters",
+//         data: { user: null, documents: null },
+//       });
+//     }
+
+//     const query = { organization: orgId };
+
+//     const documents = await Document.find(query)
+//       .select("name documentType createdAt isApproved approvedBy startDate expiryDate")
+//       .skip((pageNum - 1) * limitNum)
+//       .limit(limitNum);
+
+//     const total = await Document.countDocuments(query);
+
+//     console.log("getDocuments: Found documents", {
+//       count: documents.length,
+//       total,
+//       page: pageNum,
+//     });
+
+//     return res.status(200).json({
+//       status: "success",
+//       statusCode: 200,
+//       message: documents.length
+//         ? "Documents retrieved successfully"
+//         : "No documents found",
+//       data: {
+//         user: null,
+//         documents,
+//         total,
+//         page: pageNum,
+//         totalPages: Math.ceil(total / limitNum),
+//       },
+//     });
+//   } catch (error) {
+//     console.error("getDocuments: Error", error);
+//     return res.status(500).json({
+//       status: "error",
+//       statusCode: 500,
+//       message: "Server error during document retrieval",
+//       data: { user: null, documents: null },
+//     });
+//   }
+// };
 // const getDocuments = async (req, res) => {
 //   const { orgId } = req.params;
 //   console.log("getDocuments: Request received", { orgId, user: req.user });

@@ -121,6 +121,215 @@ const getOrganizations = async (req, res) => {
     });
   }
 };
+const getOrganization = async (req, res) => {
+  console.log("getOrganization: Request received", {
+    user: req.user,
+    orgId: req.params.id,
+  });
+
+  try {
+    // Auth check (reuse middleware for OrganizationManagement.viewOrganizations)
+    if (!req.user || !req.user.id) {
+      console.log("getOrganization: Invalid authentication data");
+      return res.status(401).json({
+        status: "error",
+        statusCode: 401,
+        message: "Authentication required",
+        data: { user: null, organization: null },
+      });
+    }
+
+    const { id } = req.params;
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        status: "error",
+        statusCode: 400,
+        message: "Invalid organization ID",
+        data: { user: null, organization: null },
+      });
+    }
+
+    // Fetch single org with aggregations (e.g., document count, and list of documents with addition dates and notes)
+    const orgAgg = await Organization.aggregate([
+      { $match: { _id: new mongoose.Types.ObjectId(id) } },
+      {
+        $lookup: {
+          from: "documents",
+          localField: "_id",
+          foreignField: "organization",
+          as: "documents",
+          pipeline: [
+            { $project: { _id: 1, name: 1, updatedAt: 1, note: 1 } },
+            { $sort: { updatedAt: -1 } },
+          ],
+        },
+      },
+      {
+        $addFields: {
+          documentCount: { $size: "$documents" },
+        },
+      },
+      {
+        $project: {
+          name: 1,
+          organizationType: 1,
+          description: 1, // Example extra field
+          updatedAt: 1,
+          documentCount: 1,
+          documents: 1,
+        },
+      },
+    ]);
+
+    if (orgAgg.length === 0) {
+      return res.status(404).json({
+        status: "error",
+        statusCode: 404,
+        message: "Organization not found",
+        data: { user: null, organization: null },
+      });
+    }
+
+    const organization = orgAgg[0]; // Single result
+
+    // Map documents to include only relevant fields (e.g., ID, name, addition date, and note)
+    const documentsWithDetails = organization.documents.map((doc) => ({
+      _id: doc._id,
+      name: doc.name,
+      addedDate: doc.updatedAt || new Date(),
+      note: doc.note || "", // The note when the document was added
+    }));
+
+    console.log("getOrganization: Found organization", {
+      id,
+      documentCount: organization.documentCount,
+    });
+
+    return res.status(200).json({
+      status: "success",
+      statusCode: 200,
+      message: "Organization retrieved successfully",
+      data: {
+        // user: null,
+        organization: {
+          _id: organization._id,
+          name: organization.name,
+          organizationType: organization.organizationType,
+          // description: organization.description || null,
+          updatedAt: organization.updatedAt || new Date(),
+          documentCount: organization.documentCount,
+          // documents: documentsWithDetails, // List of documents with addition dates and notes
+        },
+      },
+    });
+  } catch (error) {
+    console.error("getOrganization: Error", error);
+    return res.status(500).json({
+      status: "error",
+      statusCode: 500,
+      message: "Server error during organization retrieval",
+      data: { user: null, organization: null },
+    });
+  }
+};
+// const getOrganization = async (req, res) => {
+//   console.log("getOrganization: Request received", {
+//     user: req.user,
+//     orgId: req.params.id,
+//   });
+
+//   try {
+//     // Auth check (reuse middleware for OrganizationManagement.viewOrganizations)
+//     if (!req.user || !req.user.id) {
+//       console.log("getOrganization: Invalid authentication data");
+//       return res.status(401).json({
+//         status: "error",
+//         statusCode: 401,
+//         message: "Authentication required",
+//         data: { user: null, organization: null },
+//       });
+//     }
+
+//     const { id } = req.params;
+//     if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+//       return res.status(400).json({
+//         status: "error",
+//         statusCode: 400,
+//         message: "Invalid organization ID",
+//         data: { user: null, organization: null },
+//       });
+//     }
+
+//     // Fetch single org with aggregations (e.g., document count, maybe more like user count)
+//     const orgAgg = await Organization.aggregate([
+//       { $match: { _id: new mongoose.Types.ObjectId(id) } },
+//       {
+//         $lookup: {
+//           from: "documents",
+//           localField: "_id",
+//           foreignField: "organization",
+//           as: "docs",
+//           pipeline: [{ $count: "count" }],
+//         },
+//       },
+//       {
+//         $addFields: {
+//           documentCount: { $ifNull: [{ $arrayElemAt: ["$docs.count", 0] }, 0] },
+//           // Add more if needed, e.g., userCount via another $lookup
+//         },
+//       },
+//       {
+//         $project: {
+//           name: 1,
+//           organizationType: 1,
+//           description: 1, // Example extra field
+//           createdAt: 1,
+//           updatedAt: 1,
+//           documentCount: 1,
+//           // Add others as per Figma/detail needs
+//         },
+//       },
+//     ]);
+
+//     if (orgAgg.length === 0) {
+//       return res.status(404).json({
+//         status: "error",
+//         statusCode: 404,
+//         message: "Organization not found",
+//         data: { user: null, organization: null },
+//       });
+//     }
+
+//     const organization = orgAgg[0]; // Single result
+
+//     console.log("getOrganization: Found organization", {
+//       id,
+//       documentCount: organization.documentCount,
+//     });
+
+//     return res.status(200).json({
+//       status: "success",
+//       statusCode: 200,
+//       message: "Organization retrieved successfully",
+//       data: {
+//         user: null,
+//         organization: {
+//           _id: organization._id,
+//           name: organization.name,
+//           // ... map other fields
+//         },
+//       },
+//     });
+//   } catch (error) {
+//     console.error("getOrganization: Error", error);
+//     return res.status(500).json({
+//       status: "error",
+//       statusCode: 500,
+//       message: "Server error during organization retrieval",
+//       data: { user: null, organization: null },
+//     });
+//   }
+// };
 // const getOrganizations = async (req, res) => {
 //   console.log("getOrganizations: Request received", { user: req.user });
 
@@ -581,6 +790,7 @@ module.exports = {
   getOrganizations,
   addOrganization,
   deleteOrganization,
+  getOrganization,
   updateOrganization,
   getOrganizationMetrics,
 };

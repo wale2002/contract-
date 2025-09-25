@@ -54,5 +54,11 @@ router.get(
   checkPermission("OrganizationManagement.viewOrganizations"), // Assuming metrics requires view permission
   organizationController.getOrganizationMetrics
 );
+router.get(
+  "/:id",
+  authMiddleware,
+  checkPermission("OrganizationManagement.viewOrganizations"),
+  organizationController.getOrganization
+);
 
 module.exports = router;
