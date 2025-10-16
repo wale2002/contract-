@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 const User = require("../models/User");
 const Role = require("../models/Role");
-const Email = require("../utils/email");
+// const Email = require("../utils/email");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
@@ -11,12 +11,12 @@ const validTimezones = require("moment-timezone").tz.names();
 const createUser = async (req, res) => {
   const { fullName, Department, email, password, role, phoneNumber, status } =
     req.body;
-  console.log("createUser: Request received", {
-    fullName,
-    email,
-    role,
-    admin: req.user,
-  });
+  // console.log("createUser: Request received", {
+  //   fullName,
+  //   email,
+  //   role,
+  //   admin: req.user,
+  // });
 
   try {
     // Check authentication (middleware handles UserManagement.createUsers permission)
@@ -38,13 +38,13 @@ const createUser = async (req, res) => {
       !password?.trim() ||
       !phoneNumber?.trim()
     ) {
-      console.log("createUser: Missing or empty required fields", {
-        fullName,
-        Department,
-        email,
-        password,
-        phoneNumber,
-      });
+      // console.log("createUser: Missing or empty required fields", {
+      //   fullName,
+      //   Department,
+      //   email,
+      //   password,
+      //   phoneNumber,
+      // });
       return res.status(400).json({
         status: "error",
         statusCode: 400,
@@ -76,13 +76,13 @@ const createUser = async (req, res) => {
         )
       : [];
     if (!allowedDomains.length) {
-      console.log("createUser: No allowed email domains configured");
-      return res.status(500).json({
-        status: "error",
-        statusCode: 500,
-        message: "Email domain validation not configured",
-        data: { user: null },
-      });
+      // console.log("createUser: No allowed email domains configured");
+      // return res.status(500).json({
+      //   status: "error",
+      //   statusCode: 500,
+      //   message: "Email domain validation not configured",
+      //   data: { user: null },
+      // });
     }
     const emailDomain = normalizedEmail.split("@")[1].toLowerCase();
     if (!allowedDomains.includes(emailDomain)) {
@@ -101,7 +101,7 @@ const createUser = async (req, res) => {
 
     // Validate role
     if (!role) {
-      console.log("createUser: Role not provided");
+      // console.log("createUser: Role not provided");
       return res.status(400).json({
         status: "error",
         statusCode: 400,
@@ -177,11 +177,11 @@ const createUser = async (req, res) => {
       });
     }
 
-    console.log("createUser: User created", {
-      userId: savedUser._id,
-      fullName,
-      email: normalizedEmail,
-    });
+    // console.log("createUser: User created", {
+    //   userId: savedUser._id,
+    //   fullName,
+    //   email: normalizedEmail,
+    // });
 
     // Generate JWT token for the new user
     const token = jwt.sign(
@@ -200,12 +200,12 @@ const createUser = async (req, res) => {
     });
 
     // Send welcome email
-    try {
-      await new Email(savedUser, null, null).sendWelcome();
-      console.log("createUser: Welcome email sent", { email: normalizedEmail });
-    } catch (emailError) {
-      console.error("createUser: Failed to send welcome email", emailError);
-    }
+    // try {
+    //   await new Email(savedUser, null, null).sendWelcome();
+    //   console.log("createUser: Welcome email sent", { email: normalizedEmail });
+    // } catch (emailError) {
+    //   console.error("createUser: Failed to send welcome email", emailError);
+    // }
 
     return res.status(201).json({
       status: "success",
@@ -546,12 +546,12 @@ const createRole = async (req, res) => {
   }
 
   const { name, description, permissions } = req.body;
-  console.log("createRole: Request received", {
-    name,
-    description,
-    permissions,
-    user: req.user,
-  });
+  // console.log("createRole: Request received", {
+  //   name,
+  //   description,
+  //   permissions,
+  //   user: req.user,
+  // });
 
   try {
     // Check authentication (middleware handles UserManagement.manageUserRoles permission)

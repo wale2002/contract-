@@ -7,13 +7,13 @@ const AuditLog = require("../models/AuditLog");
 const validTimezones = require("moment-timezone").tz.names();
 
 const getAuditLogs = async (req, res) => {
-  console.log("getAuditLogs: Request received", { user: req.user });
+  // console.log("getAuditLogs: Request received", { user: req.user });
 
   try {
     // Allow all authenticated users to view audit logs
     const user = await User.findById(req.user.id);
     if (!user) {
-      console.log("getAuditLogs: User not found", { userId: req.user.id });
+      // console.log("getAuditLogs: User not found", { userId: req.user.id });
       return res.status(404).json({
         status: "error",
         statusCode: 404,
@@ -55,12 +55,12 @@ const getAuditLogs = async (req, res) => {
 
 const login = async (req, res) => {
   const { email, password } = req.body;
-  console.log("login: Request received", { email });
+  // console.log("login: Request received", { email });
 
   try {
     // Input validation
     if (!email || !password) {
-      console.log("login: Missing credentials", { email });
+      // console.log("login: Missing credentials", { email });
       return res.status(400).json({
         status: "error",
         statusCode: 400,
@@ -78,17 +78,17 @@ const login = async (req, res) => {
       .populate("role");
 
     // Debug logging to check user and role status
-    console.log("login: User found", {
-      userId: user?._id,
-      email: user?.email,
-      roleId: user?.role?._id || user?.role,
-      roleName: user?.role?.name,
-      roleIsNull: user?.role === null,
-      roleIsUndefined: typeof user?.role === "undefined",
-    });
+    // console.log("login: User found", {
+    //   userId: user?._id,
+    //   email: user?.email,
+    //   roleId: user?.role?._id || user?.role,
+    //   roleName: user?.role?.name,
+    //   roleIsNull: user?.role === null,
+    //   roleIsUndefined: typeof user?.role === "undefined",
+    // });
 
     if (!user) {
-      console.log("login: User not found", { email: normalizedEmail });
+      // console.log("login: User not found", { email: normalizedEmail });
       return res.status(400).json({
         status: "error",
         statusCode: 400,
@@ -100,7 +100,7 @@ const login = async (req, res) => {
     // Compare passwords
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      console.log("login: Password mismatch", { email: normalizedEmail });
+      // console.log("login: Password mismatch", { email: normalizedEmail });
       return res.status(400).json({
         status: "error",
         statusCode: 400,
@@ -170,11 +170,11 @@ const login = async (req, res) => {
         "User has no role assigned. Please assign a role to enable permissions.";
     }
 
-    console.log("login: Success", {
-      userId: user._id,
-      roleName: user.role?.name || "No Role",
-      hasPermissions: !!user.role,
-    });
+    // console.log("login: Success", {
+    //   userId: user._id,
+    //   roleName: user.role?.name || "No Role",
+    //   hasPermissions: !!user.role,
+    // });
 
     return res.status(200).json({
       status: "success",
@@ -204,7 +204,7 @@ const getMe = async (req, res) => {
   try {
     const token = req.headers.authorization?.split(" ")[1];
     if (!token) {
-      console.log("auth/me: No token provided");
+      // console.log("auth/me: No token provided");
       return res.status(401).json({
         status: "error",
         statusCode: 401,
@@ -214,11 +214,11 @@ const getMe = async (req, res) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    console.log("auth/me: Token decoded", { userId: decoded.id });
+    // console.log("auth/me: Token decoded", { userId: decoded.id });
 
     const user = await User.findById(decoded.id).lean();
     if (!user) {
-      console.log("auth/me: User not found", { userId: decoded.id });
+      // console.log("auth/me: User not found", { userId: decoded.id });
       return res.status(404).json({
         status: "error",
         statusCode: 404,

@@ -5,7 +5,7 @@ const { cloudinary } = require("../config/cloudinaryStorage");
 const fs = require("fs");
 const mongoose = require("mongoose");
 const Notification = require("../models/Notification");
-const Email = require("../utils/email");
+// const Email = require("../utils/email");
 const AuditLog = require("../models/AuditLog");
 const https = require("https");
 
@@ -184,17 +184,17 @@ const uploadDocument = async (req, res) => {
   const { documentName, documentType, startDate, expiryDate } = req.body;
   const file = req.file;
 
-  console.log("uploadDocument: Full req.body", req.body);
-  console.log("uploadDocument: Full req.file", req.file);
-  console.log("uploadDocument: Request received", {
-    orgId,
-    documentName,
-    documentType,
-    startDate,
-    expiryDate,
-    file: file?.originalname,
-    user: req.user,
-  });
+  // console.log("uploadDocument: Full req.body", req.body);
+  // console.log("uploadDocument: Full req.file", req.file);
+  // console.log("uploadDocument: Request received", {
+  //   orgId,
+  //   documentName,
+  //   documentType,
+  //   startDate,
+  //   expiryDate,
+  //   file: file?.originalname,
+  //   user: req.user,
+  // });
 
   try {
     const user = await User.findById(req.user.id).populate("role");
@@ -329,11 +329,11 @@ const uploadDocument = async (req, res) => {
 
     await document.save();
 
-    console.log("uploadDocument: Document saved", {
-      documentId: document._id,
-      organization: document.organization,
-      cloudinaryPublicId: uploadResult.public_id,
-    });
+    // console.log("uploadDocument: Document saved", {
+    //   documentId: document._id,
+    //   organization: document.organization,
+    //   cloudinaryPublicId: uploadResult.public_id,
+    // });
 
     const auditLog = new AuditLog({
       user: req.user.id,
@@ -359,36 +359,36 @@ const uploadDocument = async (req, res) => {
       notificationId: notification._id,
     });
 
-    try {
-      const email = new Email(
-        user,
-        `https://your-app-url.com/documents/${orgId}`,
-        null,
-        {
-          documentName: document.name,
-          uploaderName: user.fullName,
-          uploaderEmail: user.email,
-          organizationName: organization.name,
-          uploadTime: document.createdAt.toLocaleString(),
-          documentsUrl: `https://your-app-url.com/documents/${orgId}`,
-          startDate: document.startDate
-            ? document.startDate.toLocaleDateString()
-            : "N/A",
-          expiryDate: document.expiryDate
-            ? document.expiryDate.toLocaleDateString()
-            : "N/A",
-        }
-      );
-      await email.sendDocumentUpload();
-      console.log("uploadDocument: Notification email sent", {
-        to: user.email,
-      });
-    } catch (emailError) {
-      console.error(
-        "uploadDocument: Failed to send notification email",
-        emailError
-      );
-    }
+    // try {
+    //   const email = new Email(
+    //     user,
+    //     `https://your-app-url.com/documents/${orgId}`,
+    //     null,
+    //     {
+    //       documentName: document.name,
+    //       uploaderName: user.fullName,
+    //       uploaderEmail: user.email,
+    //       organizationName: organization.name,
+    //       uploadTime: document.createdAt.toLocaleString(),
+    //       documentsUrl: `https://your-app-url.com/documents/${orgId}`,
+    //       startDate: document.startDate
+    //         ? document.startDate.toLocaleDateString()
+    //         : "N/A",
+    //       expiryDate: document.expiryDate
+    //         ? document.expiryDate.toLocaleDateString()
+    //         : "N/A",
+    //     }
+    //   );
+    //   await email.sendDocumentUpload();
+    //   console.log("uploadDocument: Notification email sent", {
+    //     to: user.email,
+    //   });
+    // } catch (emailError) {
+    //   console.error(
+    //     "uploadDocument: Failed to send notification email",
+    //     emailError
+    //   );
+    // }
 
     try {
       fs.unlinkSync(file.path);
@@ -609,10 +609,10 @@ const downloadDocument = async (req, res) => {
 
     const request = https.get(fileUrl, (cloudRes) => {
       if (cloudRes.statusCode !== 200) {
-        console.log("downloadDocument: Invalid response from storage", {
-          statusCode: cloudRes.statusCode,
-          fileUrl,
-        });
+        // console.log("downloadDocument: Invalid response from storage", {
+        //   statusCode: cloudRes.statusCode,
+        //   fileUrl,
+        // });
         // Consume the response to avoid memory leaks
         cloudRes.resume();
         return res.status(500).json({
@@ -678,10 +678,10 @@ const deleteDocument = async (req, res) => {
       user.role.name !== "superAdmin" &&
       document.uploadedBy.toString() !== req.user.id
     ) {
-      console.log("deleteDocument: Unauthorized", {
-        userId: req.user.id,
-        documentUploader: document.uploadedBy,
-      });
+      // console.log("deleteDocument: Unauthorized", {
+      //   userId: req.user.id,
+      //   documentUploader: document.uploadedBy,
+      // });
       return res.status(403).json({
         status: "error",
         statusCode: 403,
