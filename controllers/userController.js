@@ -301,6 +301,7 @@ const getAllUsers = async (req, res) => {
     // Fetch users (middleware already checked UserManagement.viewUsers permission)
     const users = await User.find(query)
       .populate("role")
+      .populate("organization")
       .select("-password -resetPasswordToken -resetPasswordExpires")
       .skip((pageNum - 1) * limitNum)
       .limit(limitNum);
@@ -753,48 +754,34 @@ const getAllRoles = async (req, res) => {
       });
     }
 
-    // Group roles by exact permissions string for efficient user counting
-    const permToRoleIds = new Map();
-    roles.forEach((role) => {
-      const permStr = JSON.stringify(role.permissions);
-      if (!permToRoleIds.has(permStr)) {
-        permToRoleIds.set(permStr, []);
-      }
-      permToRoleIds.get(permStr).push(role._id);
-    });
+    // Enhance each role with list of assigned users (limited fields), user count, and totalPermissions
+    const enhancedRoles = await Promise.all(
+      roles.map(async (role) => {
+        // Fetch users assigned to this specific role, only fullname, department, email
+        const users = await User.find({ role: role._id }).select(
+          "fullName Department email"
+        );
 
-    // Count total users per permission group
-    const groupUserCounts = {};
-    for (const [permStr, roleIds] of permToRoleIds.entries()) {
-      if (roleIds.length > 0) {
-        const totalUsers = await User.countDocuments({
-          role: { $in: roleIds },
+        const usersAssigned = users.length;
+
+        // Count total true permissions
+        let totalPermissions = 0;
+        const permKeys = Object.keys(role.permissions);
+        permKeys.forEach((key) => {
+          const subPerms = role.permissions[key];
+          Object.values(subPerms).forEach((value) => {
+            if (value === true) totalPermissions++;
+          });
         });
-        groupUserCounts[permStr] = totalUsers;
-      }
-    }
 
-    // Enhance each role with usersAssigned (total for the permission group) and totalPermissions
-    const enhancedRoles = roles.map((role) => {
-      const permStr = JSON.stringify(role.permissions);
-      const usersAssigned = groupUserCounts[permStr] || 0;
-
-      // Count total true permissions
-      let totalPermissions = 0;
-      const permKeys = Object.keys(role.permissions);
-      permKeys.forEach((key) => {
-        const subPerms = role.permissions[key];
-        Object.values(subPerms).forEach((value) => {
-          if (value === true) totalPermissions++;
-        });
-      });
-
-      return {
-        ...role.toObject(),
-        usersAssigned,
-        totalPermissions,
-      };
-    });
+        return {
+          ...role.toObject(),
+          users,
+          usersAssigned,
+          totalPermissions,
+        };
+      })
+    );
 
     return res.status(200).json({
       status: "success",

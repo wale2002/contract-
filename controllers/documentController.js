@@ -69,6 +69,115 @@ const getNotifications = async (req, res) => {
   }
 };
 
+// const getDocuments = async (req, res) => {
+//   const { orgId } = req.params;
+//   console.log("getDocuments: Request received", { orgId, user: req.user });
+
+//   try {
+//     // Skip re-fetch if middleware populates req.user fully; otherwise, fetch minimally
+//     const user = await User.findById(req.user.id)
+//       .select("organization")
+//       .populate("role"); // Only select needed fields
+
+//     if (!user) {
+//       console.log("getDocuments: User not found", { userId: req.user.id });
+//       return res.status(404).json({
+//         status: "error",
+//         statusCode: 404,
+//         message: "User not found",
+//         data: { user: null, documents: null },
+//       });
+//     }
+
+//     const organization = await Organization.findById(orgId);
+//     if (!organization) {
+//       console.log("getDocuments: Organization not found", { orgId });
+//       return res.status(404).json({
+//         status: "error",
+//         statusCode: 404,
+//         message: "Organization not found",
+//         data: { user: null, documents: null },
+//       });
+//     }
+
+//     const { page = 1, limit = 10 } = req.query;
+//     const pageNum = parseInt(page, 10);
+//     const limitNum = parseInt(limit, 10);
+
+//     if (isNaN(pageNum) || pageNum < 1 || isNaN(limitNum) || limitNum < 1) {
+//       return res.status(400).json({
+//         status: "error",
+//         statusCode: 400,
+//         message: "Invalid page or limit parameters",
+//         data: { user: null, documents: null },
+//       });
+//     }
+
+//     const query = { organization: orgId };
+
+//     const documents = await Document.find(query)
+//       .select(
+//         "name documentType createdAt isApproved approvedBy startDate expiryDate fileUrl"
+//       )
+//       .skip((pageNum - 1) * limitNum)
+//       .limit(limitNum);
+
+//     const total = await Document.countDocuments(query);
+
+//     // Function to get file size in MB from URL
+//     const getFileSizeMB = (url) => {
+//       return new Promise((resolve) => {
+//         const req = https.request(url, { method: "HEAD" }, (res) => {
+//           const contentLength = res.headers["content-length"];
+//           const sizeInBytes = contentLength ? parseInt(contentLength, 10) : 0;
+//           resolve((sizeInBytes / (1024 * 1024)).toFixed(2));
+//         });
+//         req.on("error", () => resolve("0.00"));
+//         req.end();
+//       });
+//     };
+
+//     // Add sizeMB to each document
+//     const documentsWithSize = await Promise.all(
+//       documents.map(async (doc) => {
+//         const sizeMB = await getFileSizeMB(doc.fileUrl);
+//         return {
+//           ...doc.toObject(),
+//           sizeMB: parseFloat(sizeMB),
+//         };
+//       })
+//     );
+
+//     console.log("getDocuments: Found documents", {
+//       count: documentsWithSize.length,
+//       total,
+//       page: pageNum,
+//     });
+
+//     return res.status(200).json({
+//       status: "success",
+//       statusCode: 200,
+//       message: documentsWithSize.length
+//         ? "Documents retrieved successfully"
+//         : "No documents found",
+//       data: {
+//         user: null,
+//         documents: documentsWithSize,
+//         total,
+//         page: pageNum,
+//         totalPages: Math.ceil(total / limitNum),
+//       },
+//     });
+//   } catch (error) {
+//     console.error("getDocuments: Error", error);
+//     return res.status(500).json({
+//       status: "error",
+//       statusCode: 500,
+//       message: "Server error during document retrieval",
+//       data: { user: null, documents: null },
+//     });
+//   }
+// };
 const getDocuments = async (req, res) => {
   const { orgId } = req.params;
   console.log("getDocuments: Request received", { orgId, user: req.user });
@@ -117,8 +226,9 @@ const getDocuments = async (req, res) => {
 
     const documents = await Document.find(query)
       .select(
-        "name documentType createdAt isApproved approvedBy startDate expiryDate fileUrl"
+        "name documentType createdAt isApproved approvedBy startDate expiryDate fileUrl uploadedBy"
       )
+      .populate("uploadedBy", "fullName email")
       .skip((pageNum - 1) * limitNum)
       .limit(limitNum);
 
@@ -1148,8 +1258,487 @@ const getContractExpiryAlerts = async (req, res) => {
     });
   }
 };
+const getEnhancedContractExpiryAlerts = async (req, res) => {
+  const { orgId } = req.params;
+  console.log("getEnhancedContractExpiryAlerts: Request received", {
+    orgId,
+    user: req.user,
+  });
 
+  try {
+    const user = await User.findById(req.user.id).populate("role");
+    if (!user || !user.role.permissions.DocumentManagement.viewDocuments) {
+      console.log("getEnhancedContractExpiryAlerts: Unauthorized", {
+        userId: req.user.id,
+      });
+      return res.status(403).json({
+        status: "error",
+        statusCode: 403,
+        message: "Unauthorized to view documents",
+        data: { user: null, alerts: null },
+      });
+    }
+
+    const organization = await Organization.findById(orgId);
+    if (!organization) {
+      console.log("getEnhancedContractExpiryAlerts: Organization not found", {
+        orgId,
+      });
+      return res.status(404).json({
+        status: "error",
+        statusCode: 404,
+        message: "Organization not found",
+        data: { user: null, alerts: null },
+      });
+    }
+
+    if (
+      user.role.name !== "superAdmin" &&
+      user.organization.toString() !== orgId
+    ) {
+      console.log("getEnhancedContractExpiryAlerts: User not in organization", {
+        userId: req.user.id,
+        orgId,
+      });
+      return res.status(403).json({
+        status: "error",
+        statusCode: 403,
+        message: "Unauthorized to view alerts in this organization",
+        data: { user: null, alerts: null },
+      });
+    }
+
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    // Aggregate for expiry alerts with color flags
+    const expiryAlerts = await Document.aggregate([
+      {
+        $match: {
+          organization: new mongoose.Types.ObjectId(orgId),
+          expiryDate: { $gte: now },
+        },
+      },
+      {
+        $addFields: {
+          daysToExpiry: {
+            $divide: [{ $subtract: ["$expiryDate", now] }, 1000 * 60 * 60 * 24],
+          },
+        },
+      },
+      {
+        $addFields: {
+          flagColor: {
+            $cond: {
+              if: { $lte: ["$daysToExpiry", 7] },
+              then: "red",
+              else: {
+                $cond: {
+                  if: {
+                    $and: [
+                      { $gte: ["$daysToExpiry", 8] },
+                      { $lte: ["$daysToExpiry", 14] },
+                    ],
+                  },
+                  then: "orange",
+                  else: {
+                    $cond: {
+                      if: {
+                        $and: [
+                          { $gte: ["$daysToExpiry", 15] },
+                          { $lte: ["$daysToExpiry", 30] },
+                        ],
+                      },
+                      then: "yellow",
+                      else: "green",
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      {
+        $match: {
+          $expr: {
+            $and: [
+              {
+                $lte: [
+                  "$daysToExpiry",
+                  "$notificationPreferences.contractExpiryDays",
+                ],
+              },
+              { $lte: ["$daysToExpiry", 30] },
+            ],
+          },
+        },
+      },
+      {
+        $project: {
+          name: 1,
+          documentType: 1,
+          expiryDate: 1,
+          uploadedBy: 1,
+          daysToExpiry: { $round: ["$daysToExpiry", 0] },
+          flagColor: 1,
+          alertType: { $literal: "expiry" },
+        },
+      },
+      { $sort: { daysToExpiry: 1 } },
+    ]);
+
+    // Aggregate for recently uploaded documents (within 30 days) as "new upload" alerts
+    const newUploadAlerts = await Document.aggregate([
+      {
+        $match: {
+          organization: new mongoose.Types.ObjectId(orgId),
+          createdAt: { $gte: thirtyDaysAgo },
+          expiryDate: { $exists: true, $ne: null }, // Only documents with expiry dates
+        },
+      },
+      {
+        $addFields: {
+          daysSinceUpload: {
+            $divide: [{ $subtract: [now, "$createdAt"] }, 1000 * 60 * 60 * 24],
+          },
+        },
+      },
+      {
+        $addFields: {
+          flagColor: {
+            $cond: {
+              if: { $lte: ["$daysSinceUpload", 7] },
+              then: "blue", // New upload within a week
+              else: "light-blue", // New upload 8-30 days
+            },
+          },
+        },
+      },
+      {
+        $match: {
+          $expr: { $lte: ["$daysSinceUpload", 30] },
+        },
+      },
+      {
+        $project: {
+          name: 1,
+          documentType: 1,
+          createdAt: 1, // Use createdAt instead of expiryDate for upload alerts
+          uploadedBy: 1,
+          daysSinceUpload: { $round: ["$daysSinceUpload", 0] },
+          flagColor: 1,
+          alertType: { $literal: "new-upload" },
+        },
+      },
+      { $sort: { daysSinceUpload: 1 } }, // Most recent first
+    ]);
+
+    // Combine both types of alerts
+    const allAlerts = [...expiryAlerts, ...newUploadAlerts];
+
+    console.log("getEnhancedContractExpiryAlerts: Alerts retrieved", {
+      expiryCount: expiryAlerts.length,
+      newUploadCount: newUploadAlerts.length,
+      total: allAlerts.length,
+    });
+
+    return res.status(200).json({
+      status: "success",
+      statusCode: 200,
+      message: allAlerts.length
+        ? "Enhanced contract alerts (expiry & new uploads) retrieved successfully"
+        : "No alerts found",
+      data: {
+        user: null,
+        alerts: allAlerts,
+      },
+    });
+  } catch (error) {
+    console.error("getEnhancedContractExpiryAlerts: Error", error);
+    return res.status(500).json({
+      status: "error",
+      statusCode: 500,
+      message: "Server error during enhanced contract alerts retrieval",
+      data: { user: null, alerts: null },
+    });
+  }
+};
+const getGlobalExpiryAlerts = async (req, res) => {
+  console.log("getGlobalExpiryAlerts: Request received", { user: req.user });
+
+  try {
+    const user = await User.findById(req.user.id).populate("role");
+    if (!user || !user.role.permissions.DocumentManagement.viewDocuments) {
+      console.log("getGlobalExpiryAlerts: Unauthorized", {
+        userId: req.user.id,
+      });
+      return res.status(403).json({
+        status: "error",
+        statusCode: 403,
+        message: "Unauthorized to view documents",
+        data: { user: null, alerts: null },
+      });
+    }
+
+    // Determine accessible organizations
+    let accessibleOrgs = [];
+    if (user.role.name === "superAdmin") {
+      const allOrgs = await Organization.find({}).select("_id");
+      accessibleOrgs = allOrgs.map((org) => org._id);
+    } else if (user.organization) {
+      accessibleOrgs = [user.organization];
+    }
+
+    if (accessibleOrgs.length === 0) {
+      console.log("getGlobalExpiryAlerts: No accessible organizations");
+      return res.status(200).json({
+        status: "success",
+        statusCode: 200,
+        message: "No alerts found",
+        data: {
+          user: null,
+          alerts: [],
+        },
+      });
+    }
+
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const accessibleOrgIds = accessibleOrgs.map(
+      (id) => new mongoose.Types.ObjectId(id)
+    );
+
+    // Aggregate for expiry alerts with color flags and uploader name
+    const expiryAlerts = await Document.aggregate([
+      {
+        $match: {
+          organization: { $in: accessibleOrgIds },
+          expiryDate: { $gte: now },
+        },
+      },
+      {
+        $addFields: {
+          daysToExpiry: {
+            $divide: [{ $subtract: ["$expiryDate", now] }, 1000 * 60 * 60 * 24],
+          },
+        },
+      },
+      {
+        $addFields: {
+          flagColor: {
+            $cond: {
+              if: { $lte: ["$daysToExpiry", 7] },
+              then: "red",
+              else: {
+                $cond: {
+                  if: {
+                    $and: [
+                      { $gte: ["$daysToExpiry", 8] },
+                      { $lte: ["$daysToExpiry", 14] },
+                    ],
+                  },
+                  then: "orange",
+                  else: {
+                    $cond: {
+                      if: {
+                        $and: [
+                          { $gte: ["$daysToExpiry", 15] },
+                          { $lte: ["$daysToExpiry", 30] },
+                        ],
+                      },
+                      then: "yellow",
+                      else: "green",
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      {
+        $match: {
+          $expr: {
+            $and: [
+              {
+                $lte: [
+                  "$daysToExpiry",
+                  "$notificationPreferences.contractExpiryDays",
+                ],
+              },
+              { $lte: ["$daysToExpiry", 30] },
+            ],
+          },
+        },
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "uploadedBy",
+          foreignField: "_id",
+          as: "uploader",
+          pipeline: [{ $project: { fullName: 1 } }],
+        },
+      },
+      {
+        $addFields: {
+          uploadedBy: { $arrayElemAt: ["$uploader.fullName", 0] },
+          daysToExpiry: { $round: ["$daysToExpiry", 0] },
+        },
+      },
+      {
+        $unset: "uploader",
+      },
+      {
+        $project: {
+          name: 1,
+          documentType: 1,
+          expiryDate: 1,
+          organization: 1,
+          uploadedBy: 1,
+          daysToExpiry: 1,
+          flagColor: 1,
+          alertType: { $literal: "expiry" },
+        },
+      },
+      { $sort: { daysToExpiry: 1 } },
+    ]);
+
+    // Aggregate for recently uploaded documents (within 30 days) as "new upload" alerts
+    const newUploadAlerts = await Document.aggregate([
+      {
+        $match: {
+          organization: { $in: accessibleOrgIds },
+          createdAt: { $gte: thirtyDaysAgo },
+          expiryDate: { $exists: true, $ne: null }, // Only documents with expiry dates
+        },
+      },
+      {
+        $addFields: {
+          daysSinceUpload: {
+            $divide: [{ $subtract: [now, "$createdAt"] }, 1000 * 60 * 60 * 24],
+          },
+        },
+      },
+      {
+        $addFields: {
+          flagColor: {
+            $cond: {
+              if: { $lte: ["$daysSinceUpload", 7] },
+              then: "blue", // New upload within a week
+              else: "light-blue", // New upload 8-30 days
+            },
+          },
+        },
+      },
+      {
+        $match: {
+          $expr: { $lte: ["$daysSinceUpload", 30] },
+        },
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "uploadedBy",
+          foreignField: "_id",
+          as: "uploader",
+          pipeline: [{ $project: { fullName: 1 } }],
+        },
+      },
+      {
+        $addFields: {
+          uploadedBy: { $arrayElemAt: ["$uploader.fullName", 0] },
+          daysSinceUpload: { $round: ["$daysSinceUpload", 0] },
+        },
+      },
+      {
+        $unset: "uploader",
+      },
+      {
+        $project: {
+          name: 1,
+          documentType: 1,
+          createdAt: 1, // Use createdAt instead of expiryDate for upload alerts
+          organization: 1,
+          uploadedBy: 1,
+          daysSinceUpload: 1,
+          flagColor: 1,
+          alertType: { $literal: "new-upload" },
+        },
+      },
+      { $sort: { daysSinceUpload: 1 } }, // Most recent first
+    ]);
+
+    // Combine both types of alerts
+    const allAlerts = [...expiryAlerts, ...newUploadAlerts];
+
+    // Send notifications immediately for new expiry alerts (if not already notified recently)
+    for (const alert of expiryAlerts) {
+      const existingNotif = await Notification.findOne({
+        type: "document_upload", // FIXED: Use valid enum value
+        "metadata.documentId": alert._id,
+        createdAt: { $gte: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) }, // Within last week
+      });
+
+      if (!existingNotif) {
+        const docOrg = await Organization.findById(alert.organization).select(
+          "name"
+        );
+        const notification = new Notification({
+          user: req.user.id, // FIXED: Set required user field to current user
+          organization: alert.organization,
+          type: "document_upload", // FIXED: Use valid enum value (adjust if needed based on schema)
+          message: `Document "${alert.name}" (${
+            alert.documentType
+          }) expires in ${alert.daysToExpiry} days on ${new Date(
+            alert.expiryDate
+          ).toLocaleDateString()}.`,
+          metadata: {
+            documentId: alert._id,
+            daysToExpiry: alert.daysToExpiry,
+            orgName: docOrg?.name,
+          },
+        });
+        await notification.save();
+        console.log("getGlobalExpiryAlerts: Created expiry notification", {
+          documentId: alert._id,
+          notificationId: notification._id,
+        });
+      }
+    }
+
+    console.log("getGlobalExpiryAlerts: Alerts retrieved", {
+      expiryCount: expiryAlerts.length,
+      newUploadCount: newUploadAlerts.length,
+      total: allAlerts.length,
+      accessibleOrgs: accessibleOrgs.length,
+    });
+
+    return res.status(200).json({
+      status: "success",
+      statusCode: 200,
+      message: allAlerts.length
+        ? "Global enhanced contract alerts (expiry & new uploads) retrieved successfully"
+        : "No global alerts found",
+      data: {
+        user: null,
+        alerts: allAlerts,
+      },
+    });
+  } catch (error) {
+    console.error("getGlobalExpiryAlerts: Error", error);
+    return res.status(500).json({
+      status: "error",
+      statusCode: 500,
+      message: "Server error during global alerts retrieval",
+      data: { user: null, alerts: null },
+    });
+  }
+};
 module.exports = {
+  getGlobalExpiryAlerts,
+  getEnhancedContractExpiryAlerts,
   getNotifications,
   getContractExpiryAlerts,
   getDocuments,

@@ -12,6 +12,17 @@ router.get(
   checkPermission("DocumentManagement.viewDocuments"),
   documentController.getDocuments
 );
+router.get(
+  "/enhanced-alerts/:orgId",
+  authMiddleware,
+  documentController.getEnhancedContractExpiryAlerts
+);
+router.get(
+  "/global-alerts",
+  authMiddleware,
+  checkPermission("DocumentManagement.viewDocuments"),
+  documentController.getGlobalExpiryAlerts
+);
 router.post(
   "/:orgId/upload",
   authMiddleware,
